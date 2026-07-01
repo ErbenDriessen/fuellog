@@ -39,3 +39,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Planning & context (owner rule: never commit)
+/docs/
+/CLAUDE.md
