@@ -2,11 +2,13 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { ActivityIndicator, View, useColorScheme } from 'react-native';
 import { openAppDatabase } from './openAppDatabase';
 import { makeFoodsRepository } from './repositories/foodsRepository';
+import { makeFoodLogRepository } from './repositories/foodLogRepository';
 import { seedFoods } from './seed';
 import { getTheme } from '../theme/tokens';
 
 export interface Db {
   foods: ReturnType<typeof makeFoodsRepository>;
+  foodLog: ReturnType<typeof makeFoodLogRepository>;
 }
 
 const DbContext = createContext<Db | null>(null);
@@ -20,8 +22,9 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       const exec = await openAppDatabase();
       const foods = makeFoodsRepository(exec);
+      const foodLog = makeFoodLogRepository(exec);
       await seedFoods(foods, Date.now());
-      if (active) setDb({ foods });
+      if (active) setDb({ foods, foodLog });
     })();
     return () => { active = false; };
   }, []);
