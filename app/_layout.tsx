@@ -9,6 +9,7 @@ export default function RootLayout() {
         <Stack.Screen name="build-meal" options={{ presentation: 'modal' }} />
         <Stack.Screen name="edit-targets" options={{ presentation: 'modal' }} />
         <Stack.Screen name="edit-entry" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="add-food" options={{ presentation: 'modal' }} />
       </Stack>
     </DatabaseProvider>
   );

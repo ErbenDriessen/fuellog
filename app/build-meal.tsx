@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 
 import { useDb } from '../src/db/DatabaseProvider';
 import { getTheme } from '../src/theme/tokens';
@@ -41,16 +41,18 @@ export default function BuildMealScreen() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      const all = await foods.all();
-      if (active) setAvailable(all);
-    })();
-    return () => {
-      active = false;
-    };
-  }, [foods]);
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      (async () => {
+        const all = await foods.all();
+        if (active) setAvailable(all);
+      })();
+      return () => {
+        active = false;
+      };
+    }, [foods]),
+  );
 
   const items: MealIngredient[] = useMemo(
     () => rows.map((r) => ({ food: r.food, grams: Number(r.gramsText) || 0 })),
@@ -228,6 +230,14 @@ export default function BuildMealScreen() {
                 { backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, marginTop: theme.spacing(2) },
               ]}
             >
+              <Pressable
+                testID="create-food-button"
+                onPress={() => router.push('/add-food')}
+                style={[styles.pickerRow, { borderBottomColor: theme.colors.border, padding: theme.spacing(3) }]}
+              >
+                <Text style={[styles.pickerName, { color: theme.colors.accent }]}>＋ Create a new food</Text>
+              </Pressable>
+
               {available.length === 0 ? (
                 <Text style={[styles.emptyText, { color: theme.colors.text3, padding: theme.spacing(3) }]}>
                   No foods available yet.

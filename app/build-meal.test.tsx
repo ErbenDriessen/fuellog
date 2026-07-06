@@ -53,8 +53,13 @@ jest.mock('../src/db/DatabaseProvider', () => ({
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), back: () => mockBack() },
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    require('react').useEffect(() => effect(), []);
+  },
 }));
 
+import { router } from 'expo-router';
 import BuildMealScreen from './build-meal';
 
 describe('BuildMealScreen', () => {
@@ -113,5 +118,14 @@ describe('BuildMealScreen', () => {
     await fireEvent.changeText(gramsInput, '');
     await fireEvent.press(logButton);
     expect(mockAddMany).not.toHaveBeenCalled();
+  });
+
+  it('navigates to the add-food modal from the picker', async () => {
+    await render(<BuildMealScreen />);
+
+    await fireEvent.press(screen.getByText('Add ingredient'));
+    await fireEvent.press(await screen.findByTestId('create-food-button'));
+
+    expect(router.push).toHaveBeenCalledWith('/add-food');
   });
 });
