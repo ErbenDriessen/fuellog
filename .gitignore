@@ -43,3 +43,7 @@ yarn-error.*
 # Planning & context (owner rule: never commit)
 /docs/
 /CLAUDE.md
+
+# Design prototypes & dev tooling (not shippable)
+/protos/
+/tools/
