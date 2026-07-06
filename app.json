@@ -25,7 +25,13 @@
     },
     "plugins": [
       "expo-router",
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "FuelLog uses the camera to scan product barcodes."
+        }
+      ]
     ]
   }
 }

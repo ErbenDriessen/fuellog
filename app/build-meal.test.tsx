@@ -158,6 +158,15 @@ describe('BuildMealScreen', () => {
     expect(router.push).toHaveBeenCalledWith('/add-food');
   });
 
+  it('navigates to the scan modal from the picker', async () => {
+    await render(<BuildMealScreen />);
+
+    await fireEvent.press(screen.getByText('Add ingredient'));
+    await fireEvent.press(await screen.findByTestId('scan-barcode-button'));
+
+    expect(router.push).toHaveBeenCalledWith('/scan');
+  });
+
   it('saves the current ingredients as a recipe via the name-prompt modal', async () => {
     await render(<BuildMealScreen />);
 
