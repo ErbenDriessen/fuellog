@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +17,7 @@ import { getTheme } from '../src/theme/tokens';
 import { Food } from '../src/db/repositories/foodsRepository';
 import { roundMacros } from '../src/food/macros';
 import { buildLogEntries, ingredientMacros, mealTotal, MealIngredient } from '../src/food/meal';
+import { buildRecipe } from '../src/food/recipe';
 import { todayISO } from '../src/food/date';
 import { sanitizeDecimal } from '../src/food/number';
 
@@ -33,13 +35,17 @@ function defaultMeal(): MealType {
 export default function BuildMealScreen() {
   const scheme = useColorScheme();
   const theme = getTheme(scheme === 'dark' ? 'dark' : 'light');
-  const { foods, foodLog } = useDb();
+  const { foods, foodLog, recipes } = useDb();
 
   const [meal, setMeal] = useState<MealType>(defaultMeal);
   const [available, setAvailable] = useState<Food[]>([]);
   const [rows, setRows] = useState<{ food: Food; gramsText: string }[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [recipeModalOpen, setRecipeModalOpen] = useState(false);
+  const [recipeName, setRecipeName] = useState('');
+  const [savingRecipe, setSavingRecipe] = useState(false);
+  const [recipeError, setRecipeError] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -91,6 +97,41 @@ export default function BuildMealScreen() {
       router.back();
     } finally {
       setSaving(false);
+    }
+  }
+
+  function openRecipeModal() {
+    if (validItems.length === 0) return;
+    setRecipeName('');
+    setRecipeError(null);
+    setRecipeModalOpen(true);
+  }
+
+  function closeRecipeModal() {
+    setRecipeModalOpen(false);
+    setRecipeName('');
+    setRecipeError(null);
+  }
+
+  async function handleSaveRecipe() {
+    const trimmed = recipeName.trim();
+    if (trimmed.length === 0 || savingRecipe) return;
+    setSavingRecipe(true);
+    setRecipeError(null);
+    try {
+      const { recipe, items: recipeItems } = buildRecipe(
+        recipeName,
+        validItems,
+        `recipe-${Date.now()}`,
+        (i) => `ritem-${Date.now()}-${i}`,
+        Date.now(),
+      );
+      await recipes.save(recipe, recipeItems);
+      closeRecipeModal();
+    } catch {
+      setRecipeError('Could not save recipe. Try again.');
+    } finally {
+      setSavingRecipe(false);
     }
   }
 
@@ -282,30 +323,128 @@ export default function BuildMealScreen() {
               <Text style={[styles.macroText, { color: theme.colors.fat }]}>F {total.fat}g</Text>
             </View>
           </View>
-          <Pressable
-            testID="log-meal-button"
-            disabled={validItems.length === 0 || saving}
-            onPress={handleLogMeal}
-            style={[
-              {
-                backgroundColor: validItems.length === 0 ? theme.colors.track : theme.colors.accent,
-                borderRadius: theme.radius.full,
-                paddingHorizontal: theme.spacing(6),
-                paddingVertical: theme.spacing(3),
-              },
-            ]}
-          >
-            <Text
+          <View style={styles.actionButtons}>
+            <Pressable
+              testID="save-recipe-button"
+              disabled={validItems.length === 0}
+              onPress={openRecipeModal}
               style={[
-                styles.logButtonText,
-                { color: validItems.length === 0 ? theme.colors.text3 : '#ffffff' },
+                styles.saveRecipeButton,
+                {
+                  borderColor: validItems.length === 0 ? theme.colors.track : theme.colors.accent,
+                  borderRadius: theme.radius.full,
+                  paddingHorizontal: theme.spacing(4),
+                  paddingVertical: theme.spacing(3),
+                  marginRight: theme.spacing(2),
+                },
               ]}
             >
-              Log meal
-            </Text>
-          </Pressable>
+              <Text
+                style={[
+                  styles.saveRecipeButtonText,
+                  { color: validItems.length === 0 ? theme.colors.text3 : theme.colors.accent },
+                ]}
+              >
+                Save as meal
+              </Text>
+            </Pressable>
+            <Pressable
+              testID="log-meal-button"
+              disabled={validItems.length === 0 || saving}
+              onPress={handleLogMeal}
+              style={[
+                {
+                  backgroundColor: validItems.length === 0 ? theme.colors.track : theme.colors.accent,
+                  borderRadius: theme.radius.full,
+                  paddingHorizontal: theme.spacing(6),
+                  paddingVertical: theme.spacing(3),
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.logButtonText,
+                  { color: validItems.length === 0 ? theme.colors.text3 : '#ffffff' },
+                ]}
+              >
+                Log meal
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </View>
+
+      <Modal
+        visible={recipeModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={closeRecipeModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalCard,
+              { backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, padding: theme.spacing(5) },
+            ]}
+          >
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Save as meal</Text>
+            <TextInput
+              testID="recipe-name-input"
+              value={recipeName}
+              onChangeText={setRecipeName}
+              placeholder="Recipe name"
+              placeholderTextColor={theme.colors.text3}
+              style={[
+                styles.modalInput,
+                {
+                  color: theme.colors.text,
+                  backgroundColor: theme.colors.surface2,
+                  borderRadius: theme.radius.sm,
+                  marginTop: theme.spacing(3),
+                  paddingHorizontal: theme.spacing(3),
+                },
+              ]}
+            />
+            {recipeError && (
+              <Text style={[styles.modalError, { color: theme.colors.fat, marginTop: theme.spacing(2) }]}>
+                {recipeError}
+              </Text>
+            )}
+            <View style={[styles.modalActions, { marginTop: theme.spacing(4) }]}>
+              <Pressable
+                testID="cancel-save-recipe-button"
+                onPress={closeRecipeModal}
+                style={[styles.modalCancelButton, { paddingVertical: theme.spacing(3), paddingHorizontal: theme.spacing(4) }]}
+              >
+                <Text style={[styles.modalCancelText, { color: theme.colors.text2 }]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                testID="confirm-save-recipe-button"
+                disabled={recipeName.trim().length === 0 || savingRecipe}
+                onPress={handleSaveRecipe}
+                style={[
+                  {
+                    backgroundColor:
+                      recipeName.trim().length === 0 || savingRecipe ? theme.colors.track : theme.colors.accent,
+                    borderRadius: theme.radius.full,
+                    paddingHorizontal: theme.spacing(5),
+                    paddingVertical: theme.spacing(3),
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.modalConfirmText,
+                    { color: recipeName.trim().length === 0 || savingRecipe ? theme.colors.text3 : '#ffffff' },
+                  ]}
+                >
+                  Save
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -429,6 +568,52 @@ const styles = StyleSheet.create({
   },
   logButtonText: {
     fontSize: 16,
+    fontWeight: '700',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  saveRecipeButton: {
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  saveRecipeButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: '100%',
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  modalInput: {
+    fontSize: 15,
+    paddingVertical: 10,
+  },
+  modalError: {
+    fontSize: 13,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  modalCancelButton: {},
+  modalCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  modalConfirmText: {
+    fontSize: 15,
     fontWeight: '700',
   },
 });

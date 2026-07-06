@@ -2,6 +2,7 @@ import { render, fireEvent, screen } from '@testing-library/react-native';
 
 import { Food } from '../src/db/repositories/foodsRepository';
 import { FoodLogEntry } from '../src/db/repositories/foodLogRepository';
+import { Recipe, RecipeItem } from '../src/db/repositories/recipesRepository';
 
 const rice: Food = {
   id: 'food-rice',
@@ -29,9 +30,10 @@ const chicken: Food = {
 
 const mockAddMany = jest.fn(async (_entries: FoodLogEntry[]) => {});
 const mockAdd = jest.fn(async (_entry: FoodLogEntry) => {});
+const mockSaveRecipe = jest.fn(async (_recipe: Recipe, _items: RecipeItem[]) => {});
 const mockBack = jest.fn();
 
-// `foods`/`foodLog` must be referentially stable across renders — the screen's
+// `foods`/`foodLog`/`recipes` must be referentially stable across renders — the screen's
 // `useEffect(() => { ... }, [foods])` would otherwise refire (and re-render)
 // on every render since a fresh object literal is a new reference each time.
 const mockFoodsApi = {
@@ -43,11 +45,17 @@ const mockFoodLogApi = {
   add: mockAdd,
   entriesForDate: async () => [],
 };
+const mockRecipesApi = {
+  save: mockSaveRecipe,
+  all: async () => [],
+  itemsFor: async () => [],
+};
 
 jest.mock('../src/db/DatabaseProvider', () => ({
   useDb: () => ({
     foods: mockFoodsApi,
     foodLog: mockFoodLogApi,
+    recipes: mockRecipesApi,
   }),
 }));
 
@@ -66,6 +74,7 @@ describe('BuildMealScreen', () => {
   beforeEach(() => {
     mockAddMany.mockClear();
     mockAdd.mockClear();
+    mockSaveRecipe.mockClear();
     mockBack.mockClear();
   });
 
@@ -127,5 +136,54 @@ describe('BuildMealScreen', () => {
     await fireEvent.press(await screen.findByTestId('create-food-button'));
 
     expect(router.push).toHaveBeenCalledWith('/add-food');
+  });
+
+  it('saves the current ingredients as a recipe via the name-prompt modal', async () => {
+    await render(<BuildMealScreen />);
+
+    // Add rice at 60g and chicken at 100g.
+    await fireEvent.press(screen.getByText('Add ingredient'));
+    await fireEvent.press(await screen.findByText('Rice'));
+    await fireEvent.changeText(await screen.findByTestId('grams-input-0'), '60');
+
+    await fireEvent.press(screen.getByText('Add ingredient'));
+    await fireEvent.press(await screen.findByText('Chicken breast'));
+    await fireEvent.changeText(await screen.findByTestId('grams-input-1'), '100');
+
+    await fireEvent.press(screen.getByTestId('save-recipe-button'));
+
+    const nameInput = await screen.findByTestId('recipe-name-input');
+    await fireEvent.changeText(nameInput, 'Rice and chicken bowl');
+
+    await fireEvent.press(screen.getByTestId('confirm-save-recipe-button'));
+
+    expect(mockSaveRecipe).toHaveBeenCalledTimes(1);
+    const [recipe, items] = mockSaveRecipe.mock.calls[0];
+    expect(recipe.name).toBe('Rice and chicken bowl');
+    expect(items).toHaveLength(2);
+    expect(items[0].foodId).toBe('food-rice');
+    expect(items[0].grams).toBe(60);
+    expect(items[1].foodId).toBe('food-chicken');
+    expect(items[1].grams).toBe(100);
+
+    // Stays on the build-meal screen — the user may still Log the meal.
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(mockAddMany).not.toHaveBeenCalled();
+  });
+
+  it('disables the confirm button until a recipe name is entered', async () => {
+    await render(<BuildMealScreen />);
+
+    await fireEvent.press(screen.getByText('Add ingredient'));
+    await fireEvent.press(await screen.findByText('Rice'));
+    await fireEvent.changeText(await screen.findByTestId('grams-input-0'), '60');
+
+    await fireEvent.press(screen.getByTestId('save-recipe-button'));
+
+    const confirmButton = await screen.findByTestId('confirm-save-recipe-button');
+    expect(confirmButton.props.accessibilityState?.disabled ?? confirmButton.props.disabled).toBe(true);
+
+    await fireEvent.press(confirmButton);
+    expect(mockSaveRecipe).not.toHaveBeenCalled();
   });
 });
