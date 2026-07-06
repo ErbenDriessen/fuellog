@@ -1,4 +1,10 @@
-import { insertFoodLogSql, makeFoodLogRepository, FoodLogEntry } from './foodLogRepository';
+import {
+  insertFoodLogSql,
+  updateFoodLogSql,
+  deleteFoodLogSql,
+  makeFoodLogRepository,
+  FoodLogEntry,
+} from './foodLogRepository';
 import { QueryableExecutor } from '../migrator';
 
 const sample: FoodLogEntry = {
@@ -86,5 +92,57 @@ describe('foodLogRepository', () => {
     const rows = await repo.entriesForDate('2026-07-06');
     expect(queryCalls[0].params).toEqual(['2026-07-06']);
     expect(rows[0]).toEqual(sample);
+  });
+
+  it('updateFoodLogSql() builds a parameterized update in [grams,kcal,protein,carb,fat,id] order', () => {
+    const { sql, params } = updateFoodLogSql(sample);
+    expect(sql).toContain('UPDATE food_log_entries');
+    expect(sql).toContain('WHERE id = ?');
+    expect(params).toEqual([160, 208, 4.3, 44.8, 0.5, 'e1']);
+  });
+
+  it('deleteFoodLogSql() builds a parameterized delete keyed by id', () => {
+    const { sql, params } = deleteFoodLogSql('e1');
+    expect(sql).toContain('DELETE FROM food_log_entries');
+    expect(sql).toContain('WHERE id = ?');
+    expect(params).toEqual(['e1']);
+  });
+
+  describe('byId()', () => {
+    it('maps the found row back to a FoodLogEntry', async () => {
+      const { db, queryCalls } = fakeExecutor([
+        { id: 'e1', log_date: '2026-07-06', meal: 'Lunch', food_id: 'seed-white-rice', recipe_id: null,
+          grams: 160, kcal: 208, protein: 4.3, carb: 44.8, fat: 0.5 },
+      ]);
+      const repo = makeFoodLogRepository(db);
+      const found = await repo.byId('e1');
+      expect(queryCalls[0].params).toEqual(['e1']);
+      expect(found).toEqual(sample);
+    });
+
+    it('returns null when no row is found', async () => {
+      const { db } = fakeExecutor([]);
+      const repo = makeFoodLogRepository(db);
+      const found = await repo.byId('missing');
+      expect(found).toBeNull();
+    });
+  });
+
+  it('update() forwards the parameterized update to exec', async () => {
+    const { db, execCalls } = fakeExecutor([]);
+    const repo = makeFoodLogRepository(db);
+    await repo.update(sample);
+    expect(execCalls).toHaveLength(1);
+    expect(execCalls[0].sql).toContain('UPDATE food_log_entries');
+    expect(execCalls[0].params).toEqual([160, 208, 4.3, 44.8, 0.5, 'e1']);
+  });
+
+  it('remove() forwards the parameterized delete to exec', async () => {
+    const { db, execCalls } = fakeExecutor([]);
+    const repo = makeFoodLogRepository(db);
+    await repo.remove('e1');
+    expect(execCalls).toHaveLength(1);
+    expect(execCalls[0].sql).toContain('DELETE FROM food_log_entries');
+    expect(execCalls[0].params).toEqual(['e1']);
   });
 });

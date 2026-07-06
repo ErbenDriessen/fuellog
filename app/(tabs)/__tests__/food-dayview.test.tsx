@@ -109,4 +109,13 @@ describe('Food day view', () => {
 
     expect(router.push).toHaveBeenCalledWith('/edit-targets');
   });
+
+  it('opens the edit-entry screen when a logged entry row is pressed', async () => {
+    await render(<Food />);
+    await screen.findByText('Oats');
+
+    await fireEvent.press(screen.getByTestId('entry-row-e2'));
+
+    expect(router.push).toHaveBeenCalledWith({ pathname: '/edit-entry', params: { id: 'e2' } });
+  });
 });

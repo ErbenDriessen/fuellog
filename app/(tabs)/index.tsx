@@ -241,8 +241,10 @@ export default function FoodScreen() {
           <View key={group.meal} style={{ marginTop: theme.spacing(6) }}>
             <Text style={[styles.sectionLabel, { color: theme.colors.text2 }]}>{group.meal}</Text>
             {group.entries.map((entry) => (
-              <View
+              <Pressable
                 key={entry.id}
+                testID={`entry-row-${entry.id}`}
+                onPress={() => router.push({ pathname: '/edit-entry', params: { id: entry.id } })}
                 style={[
                   styles.entryRow,
                   {
@@ -271,7 +273,7 @@ export default function FoodScreen() {
                     <Text style={[styles.entryMacroText, { color: theme.colors.fat }]}>F {entry.fat}g</Text>
                   </View>
                 </View>
-              </View>
+              </Pressable>
             ))}
           </View>
         ))}
