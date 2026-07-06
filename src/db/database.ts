@@ -1,14 +1,25 @@
-import { Migration, SqlExecutor, runMigrations } from './migrator';
+import { Migration, QueryableExecutor, runMigrations } from './migrator';
 import { migrations } from './schema';
 
+// The subset of the expo-sqlite database handle we depend on. execAsync runs
+// param-less DDL (and multi-statement scripts); runAsync is the parameterized
+// write API; getFirstAsync/getAllAsync are parameterized reads.
 export interface RawSqlite {
   execAsync(sql: string): Promise<void>;
-  getFirstAsync<T>(sql: string): Promise<T | null>;
+  runAsync(sql: string, params?: unknown[]): Promise<unknown>;
+  getFirstAsync<T>(sql: string, params?: unknown[]): Promise<T | null>;
+  getAllAsync<T>(sql: string, params?: unknown[]): Promise<T[]>;
 }
 
-export function makeExecutor(raw: RawSqlite): SqlExecutor {
+export function makeExecutor(raw: RawSqlite): QueryableExecutor {
   return {
-    exec: (sql) => raw.execAsync(sql),
+    async exec(sql: string, params?: unknown[]) {
+      if (params && params.length > 0) {
+        await raw.runAsync(sql, params);
+      } else {
+        await raw.execAsync(sql);
+      }
+    },
     async getVersion() {
       const row = await raw.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
       return row?.user_version ?? 0;
@@ -16,13 +27,14 @@ export function makeExecutor(raw: RawSqlite): SqlExecutor {
     async setVersion(v: number) {
       await raw.execAsync(`PRAGMA user_version = ${v}`);
     },
+    queryAll: (sql, params) => raw.getAllAsync(sql, params ?? []),
   };
 }
 
 export async function openDatabase(
   raw: RawSqlite,
   defs: Migration[] = migrations,
-): Promise<SqlExecutor> {
+): Promise<QueryableExecutor> {
   const exec = makeExecutor(raw);
   await runMigrations(exec, defs);
   return exec;

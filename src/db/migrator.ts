@@ -4,9 +4,13 @@ export interface Migration {
 }
 
 export interface SqlExecutor {
-  exec(sql: string): Promise<void>;
+  exec(sql: string, params?: unknown[]): Promise<void>;
   getVersion(): Promise<number>;
   setVersion(v: number): Promise<void>;
+}
+
+export interface QueryableExecutor extends SqlExecutor {
+  queryAll<T>(sql: string, params?: unknown[]): Promise<T[]>;
 }
 
 export async function runMigrations(db: SqlExecutor, defs: Migration[]): Promise<number> {
