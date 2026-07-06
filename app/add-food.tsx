@@ -55,7 +55,12 @@ export default function AddFoodScreen() {
     carbPer100: Number(values.carb || 0),
     fatPer100: Number(values.fat || 0),
   };
-  const valid = isValidCustomFood(input);
+  const valid =
+    values.kcal.trim() !== '' &&
+    values.protein.trim() !== '' &&
+    values.carb.trim() !== '' &&
+    values.fat.trim() !== '' &&
+    isValidCustomFood(input);
 
   async function handleSave() {
     if (!valid || saving) return;

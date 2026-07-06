@@ -33,7 +33,7 @@ describe('AddFoodScreen', () => {
     await fireEvent.changeText(screen.getByTestId('food-kcal-input'), '59');
     await fireEvent.changeText(screen.getByTestId('food-protein-input'), '10');
     await fireEvent.changeText(screen.getByTestId('food-carb-input'), '3.6');
-    await fireEvent.changeText(screen.getByTestId('food-fat-input'), '0.4');
+    await fireEvent.changeText(screen.getByTestId('food-fat-input'), '0');
 
     expect(saveButton.props.accessibilityState?.disabled ?? saveButton.props.disabled).toBeFalsy();
 
@@ -49,7 +49,7 @@ describe('AddFoodScreen', () => {
         kcalPer100: 59,
         proteinPer100: 10,
         carbPer100: 3.6,
-        fatPer100: 0.4,
+        fatPer100: 0,
       }),
     );
     expect(saved.id).toEqual(expect.stringMatching(/^food-/));
@@ -70,6 +70,35 @@ describe('AddFoodScreen', () => {
 
     await fireEvent.press(saveButton);
     expect(mockAdd).not.toHaveBeenCalled();
+  });
+
+  it('keeps Save disabled when the name is filled but a macro field is left blank', async () => {
+    await render(<AddFoodScreen />);
+
+    await fireEvent.changeText(screen.getByTestId('food-name-input'), 'Greek yoghurt');
+    await fireEvent.changeText(screen.getByTestId('food-kcal-input'), '59');
+    await fireEvent.changeText(screen.getByTestId('food-protein-input'), '10');
+    await fireEvent.changeText(screen.getByTestId('food-carb-input'), '3.6');
+    // fat field left blank
+
+    const saveButton = screen.getByTestId('save-food-button');
+    expect(saveButton.props.accessibilityState?.disabled ?? saveButton.props.disabled).toBe(true);
+
+    await fireEvent.press(saveButton);
+    expect(mockAdd).not.toHaveBeenCalled();
+  });
+
+  it('enables Save once the name and all four macro fields are filled, including an explicit zero', async () => {
+    await render(<AddFoodScreen />);
+
+    await fireEvent.changeText(screen.getByTestId('food-name-input'), 'Greek yoghurt');
+    await fireEvent.changeText(screen.getByTestId('food-kcal-input'), '59');
+    await fireEvent.changeText(screen.getByTestId('food-protein-input'), '10');
+    await fireEvent.changeText(screen.getByTestId('food-carb-input'), '3.6');
+    await fireEvent.changeText(screen.getByTestId('food-fat-input'), '0');
+
+    const saveButton = screen.getByTestId('save-food-button');
+    expect(saveButton.props.accessibilityState?.disabled ?? saveButton.props.disabled).toBeFalsy();
   });
 
   it('shows an inline error and stays open when add rejects', async () => {
