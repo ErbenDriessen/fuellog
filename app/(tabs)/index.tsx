@@ -4,11 +4,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 
 import { useDb } from '../../src/db/DatabaseProvider';
-import { getTheme } from '../../src/theme/tokens';
+import { getTheme, Theme } from '../../src/theme/tokens';
 import { FoodLogEntry } from '../../src/db/repositories/foodLogRepository';
+import { DailyTarget } from '../../src/db/repositories/dailyTargetsRepository';
 import { roundMacros, sumMacros } from '../../src/food/macros';
 import { Food } from '../../src/db/repositories/foodsRepository';
 import { todayISO } from '../../src/food/date';
+import { computeDayProgress, MetricProgress } from '../../src/food/targets';
+import { Ring } from '../../src/components/Ring';
 
 function todayLabel(): string {
   return new Date().toLocaleDateString(undefined, {
@@ -36,35 +39,66 @@ function groupByMeal(entries: FoodLogEntry[]): { meal: string; entries: FoodLogE
     .map(([meal, list]) => ({ meal, entries: list }));
 }
 
+function MacroMiniRing({
+  theme,
+  label,
+  color,
+  metric,
+  testID,
+}: {
+  theme: Theme;
+  label: string;
+  color: string;
+  metric: MetricProgress;
+  testID: string;
+}) {
+  return (
+    <View style={styles.macroItem}>
+      <Ring size={74} stroke={8} pct={metric.pct} color={color} trackColor={theme.colors.track} testID={testID}>
+        <Text style={[styles.miniRingValue, { color: theme.colors.text }]}>{metric.eaten}</Text>
+        <Text style={[styles.miniRingTarget, { color: theme.colors.text3 }]}>/{metric.target}g</Text>
+      </Ring>
+      <Text style={[styles.macroLabel, { color: theme.colors.text3, marginTop: theme.spacing(1) }]}>{label}</Text>
+    </View>
+  );
+}
+
 export default function FoodScreen() {
   const scheme = useColorScheme();
   const theme = getTheme(scheme === 'dark' ? 'dark' : 'light');
-  const { foodLog, foods } = useDb();
+  const { foodLog, foods, dailyTargets } = useDb();
 
   const [entries, setEntries] = useState<FoodLogEntry[]>([]);
   const [foodNames, setFoodNames] = useState<Record<string, string>>({});
+  const [target, setTarget] = useState<DailyTarget | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
       (async () => {
-        const [rows, allFoods] = await Promise.all([foodLog.entriesForDate(todayISO()), foods.all()]);
+        const [rows, allFoods, currentTarget] = await Promise.all([
+          foodLog.entriesForDate(todayISO()),
+          foods.all(),
+          dailyTargets.current(),
+        ]);
         if (active) {
           setEntries(rows);
           setFoodNames(Object.fromEntries(allFoods.map((f: Food) => [f.id, f.name])));
+          setTarget(currentTarget);
           setLoaded(true);
         }
       })();
       return () => {
         active = false;
       };
-    }, [foodLog, foods]),
+    }, [foodLog, foods, dailyTargets]),
   );
 
   const total = roundMacros(
     sumMacros(entries.map((e) => ({ kcal: e.kcal, protein: e.protein, carb: e.carb, fat: e.fat }))),
   );
+  const progress = target ? computeDayProgress(target, total) : null;
   const groups = groupByMeal(entries);
 
   return (
@@ -93,22 +127,86 @@ export default function FoodScreen() {
             },
           ]}
         >
-          <Text style={[styles.totalKcal, { color: theme.colors.text }]}>{total.kcal} kcal</Text>
-          <Text style={[styles.totalLabel, { color: theme.colors.text3 }]}>today's total</Text>
-          <View style={[styles.macroRow, { marginTop: theme.spacing(3) }]}>
-            <View style={styles.macroItem}>
-              <Text style={[styles.macroValue, { color: theme.colors.protein }]}>{total.protein}g</Text>
-              <Text style={[styles.macroLabel, { color: theme.colors.text3 }]}>Protein</Text>
-            </View>
-            <View style={styles.macroItem}>
-              <Text style={[styles.macroValue, { color: theme.colors.carbs }]}>{total.carb}g</Text>
-              <Text style={[styles.macroLabel, { color: theme.colors.text3 }]}>Carbs</Text>
-            </View>
-            <View style={styles.macroItem}>
-              <Text style={[styles.macroValue, { color: theme.colors.fat }]}>{total.fat}g</Text>
-              <Text style={[styles.macroLabel, { color: theme.colors.text3 }]}>Fat</Text>
-            </View>
+          <View style={styles.cardHeader}>
+            <Text style={[styles.totalLabel, { color: theme.colors.text3 }]}>today's total</Text>
+            <Pressable
+              testID="edit-targets-button"
+              accessibilityLabel="Edit targets"
+              onPress={() => router.push('/edit-targets')}
+              hitSlop={10}
+            >
+              <Ionicons name="create-outline" size={20} color={theme.colors.text3} />
+            </Pressable>
           </View>
+
+          {progress ? (
+            <>
+              <View style={[styles.heroRingWrap, { marginTop: theme.spacing(3) }]}>
+                <Ring
+                  size={180}
+                  stroke={16}
+                  pct={progress.kcal.pct}
+                  color={theme.colors.accent}
+                  trackColor={theme.colors.track}
+                  testID="kcal-ring"
+                >
+                  <Text style={[styles.heroRemaining, { color: theme.colors.text }]}>
+                    {Math.round(Math.abs(progress.kcal.remaining))}
+                  </Text>
+                  <Text style={[styles.heroLabel, { color: theme.colors.text3 }]}>
+                    {progress.kcal.remaining < 0 ? 'KCAL OVER' : 'KCAL LEFT'}
+                  </Text>
+                  <Text style={[styles.heroEatenTarget, { color: theme.colors.text2 }]}>
+                    {progress.kcal.eaten} / {progress.kcal.target}
+                  </Text>
+                </Ring>
+              </View>
+
+              <View style={[styles.macroRow, { marginTop: theme.spacing(5) }]}>
+                <MacroMiniRing
+                  theme={theme}
+                  label="Protein"
+                  color={theme.colors.protein}
+                  metric={progress.protein}
+                  testID="protein-ring"
+                />
+                <MacroMiniRing
+                  theme={theme}
+                  label="Carbs"
+                  color={theme.colors.carbs}
+                  metric={progress.carb}
+                  testID="carb-ring"
+                />
+                <MacroMiniRing
+                  theme={theme}
+                  label="Fat"
+                  color={theme.colors.fat}
+                  metric={progress.fat}
+                  testID="fat-ring"
+                />
+              </View>
+            </>
+          ) : (
+            <>
+              <Text style={[styles.totalKcal, { color: theme.colors.text, marginTop: theme.spacing(2) }]}>
+                {total.kcal} kcal
+              </Text>
+              <View style={[styles.macroRow, { marginTop: theme.spacing(3) }]}>
+                <View style={styles.macroItem}>
+                  <Text style={[styles.macroValue, { color: theme.colors.protein }]}>{total.protein}g</Text>
+                  <Text style={[styles.macroLabel, { color: theme.colors.text3 }]}>Protein</Text>
+                </View>
+                <View style={styles.macroItem}>
+                  <Text style={[styles.macroValue, { color: theme.colors.carbs }]}>{total.carb}g</Text>
+                  <Text style={[styles.macroLabel, { color: theme.colors.text3 }]}>Carbs</Text>
+                </View>
+                <View style={styles.macroItem}>
+                  <Text style={[styles.macroValue, { color: theme.colors.fat }]}>{total.fat}g</Text>
+                  <Text style={[styles.macroLabel, { color: theme.colors.text3 }]}>Fat</Text>
+                </View>
+              </View>
+            </>
+          )}
         </View>
 
         <Pressable
@@ -204,6 +302,35 @@ const styles = StyleSheet.create({
   totalLabel: {
     fontSize: 13,
     marginTop: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  heroRingWrap: {
+    alignItems: 'center',
+  },
+  heroRemaining: {
+    fontSize: 30,
+    fontWeight: '700',
+  },
+  heroLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+  heroEatenTarget: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  miniRingValue: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  miniRingTarget: {
+    fontSize: 11,
   },
   macroRow: {
     flexDirection: 'row',

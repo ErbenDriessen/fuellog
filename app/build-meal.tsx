@@ -17,6 +17,7 @@ import { Food } from '../src/db/repositories/foodsRepository';
 import { roundMacros } from '../src/food/macros';
 import { buildLogEntries, ingredientMacros, mealTotal, MealIngredient } from '../src/food/meal';
 import { todayISO } from '../src/food/date';
+import { sanitizeDecimal } from '../src/food/number';
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snack'] as const;
 type MealType = (typeof MEAL_TYPES)[number];
@@ -66,7 +67,7 @@ export default function BuildMealScreen() {
   }
 
   function updateGrams(index: number, text: string) {
-    const sanitized = text.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+    const sanitized = sanitizeDecimal(text);
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, gramsText: sanitized } : r)));
   }
 

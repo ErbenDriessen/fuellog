@@ -14,6 +14,10 @@ jest.mock('../../../src/db/DatabaseProvider', () => ({
       entriesForDate: async () => [],
       add: async () => {},
     },
+    dailyTargets: {
+      current: async () => null,
+      setTarget: async () => {},
+    },
   }),
 }));
 
