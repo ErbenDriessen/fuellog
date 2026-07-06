@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 
 import { useDb } from '../src/db/DatabaseProvider';
 import { getTheme } from '../src/theme/tokens';
@@ -36,6 +36,7 @@ export default function BuildMealScreen() {
   const scheme = useColorScheme();
   const theme = getTheme(scheme === 'dark' ? 'dark' : 'light');
   const { foods, foodLog, recipes } = useDb();
+  const { recipeId } = useLocalSearchParams<{ recipeId?: string }>();
 
   const [meal, setMeal] = useState<MealType>(defaultMeal);
   const [available, setAvailable] = useState<Food[]>([]);
@@ -46,6 +47,7 @@ export default function BuildMealScreen() {
   const [recipeName, setRecipeName] = useState('');
   const [savingRecipe, setSavingRecipe] = useState(false);
   const [recipeError, setRecipeError] = useState<string | null>(null);
+  const prefilledRecipeIdRef = useRef<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -59,6 +61,31 @@ export default function BuildMealScreen() {
       };
     }, [foods]),
   );
+
+  // Prefill ingredient rows from a saved recipe (one-tap re-log). Runs at most
+  // once per recipeId so later grams edits by the user aren't clobbered by a
+  // re-run of this effect (e.g. when `available` updates on refocus).
+  useEffect(() => {
+    if (!recipeId) return;
+    if (available.length === 0) return;
+    if (prefilledRecipeIdRef.current === recipeId) return;
+    prefilledRecipeIdRef.current = recipeId;
+
+    let active = true;
+    (async () => {
+      const recipeItems = await recipes.itemsFor(recipeId);
+      if (!active) return;
+      const newRows: { food: Food; gramsText: string }[] = [];
+      for (const item of recipeItems) {
+        const food = available.find((f) => f.id === item.foodId);
+        if (food) newRows.push({ food, gramsText: String(item.grams) });
+      }
+      setRows(newRows);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [recipeId, available, recipes]);
 
   const items: MealIngredient[] = useMemo(
     () => rows.map((r) => ({ food: r.food, grams: Number(r.gramsText) || 0 })),

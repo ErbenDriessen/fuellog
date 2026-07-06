@@ -45,11 +45,15 @@ const mockFoodLogApi = {
   add: mockAdd,
   entriesForDate: async () => [],
 };
+const mockItemsFor = jest.fn(async (_recipeId: string): Promise<RecipeItem[]> => []);
 const mockRecipesApi = {
   save: mockSaveRecipe,
   all: async () => [],
-  itemsFor: async () => [],
+  itemsFor: mockItemsFor,
 };
+
+// Mutable so individual tests can simulate navigating here with a `recipeId` param.
+let mockSearchParams: { recipeId?: string } = {};
 
 jest.mock('../src/db/DatabaseProvider', () => ({
   useDb: () => ({
@@ -65,6 +69,7 @@ jest.mock('expo-router', () => ({
     // eslint-disable-next-line react-hooks/rules-of-hooks
     require('react').useEffect(() => effect(), []);
   },
+  useLocalSearchParams: () => mockSearchParams,
 }));
 
 import { router } from 'expo-router';
@@ -75,7 +80,9 @@ describe('BuildMealScreen', () => {
     mockAddMany.mockClear();
     mockAdd.mockClear();
     mockSaveRecipe.mockClear();
+    mockItemsFor.mockClear();
     mockBack.mockClear();
+    mockSearchParams = {};
   });
 
   it('logs a single valid ingredient via addMany and navigates back', async () => {
@@ -185,5 +192,35 @@ describe('BuildMealScreen', () => {
 
     await fireEvent.press(confirmButton);
     expect(mockSaveRecipe).not.toHaveBeenCalled();
+  });
+
+  it('prefills ingredient rows from a recipeId route param', async () => {
+    mockSearchParams = { recipeId: 'r1' };
+    mockItemsFor.mockResolvedValueOnce([
+      { id: 'ri1', recipeId: 'r1', foodId: 'food-rice', grams: 60 },
+      { id: 'ri2', recipeId: 'r1', foodId: 'food-chicken', grams: 100 },
+    ]);
+
+    await render(<BuildMealScreen />);
+
+    expect(await screen.findByText('Rice')).toBeTruthy();
+    expect(screen.getByText('Chicken breast')).toBeTruthy();
+    expect((await screen.findByTestId('grams-input-0')).props.value).toBe('60');
+    expect(screen.getByTestId('grams-input-1').props.value).toBe('100');
+    expect(mockItemsFor).toHaveBeenCalledWith('r1');
+  });
+
+  it('skips recipe items whose food is no longer available', async () => {
+    mockSearchParams = { recipeId: 'r2' };
+    mockItemsFor.mockResolvedValueOnce([
+      { id: 'ri1', recipeId: 'r2', foodId: 'food-rice', grams: 60 },
+      { id: 'ri2', recipeId: 'r2', foodId: 'food-missing', grams: 40 },
+    ]);
+
+    await render(<BuildMealScreen />);
+
+    expect(await screen.findByText('Rice')).toBeTruthy();
+    expect(screen.getByTestId('grams-input-0').props.value).toBe('60');
+    expect(screen.queryByTestId('grams-input-1')).toBeNull();
   });
 });

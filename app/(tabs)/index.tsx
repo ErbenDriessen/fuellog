@@ -226,6 +226,23 @@ export default function FoodScreen() {
           <Text style={styles.addMealText}>Add meal</Text>
         </Pressable>
 
+        <Pressable
+          testID="saved-meals-button"
+          onPress={() => router.push('/recipes')}
+          style={[
+            styles.savedMealsButton,
+            {
+              borderColor: theme.colors.border,
+              borderRadius: theme.radius.full,
+              marginTop: theme.spacing(3),
+              paddingVertical: theme.spacing(3),
+            },
+          ]}
+        >
+          <Ionicons name="bookmark-outline" size={18} color={theme.colors.text2} />
+          <Text style={[styles.savedMealsText, { color: theme.colors.text2 }]}>Saved meals</Text>
+        </Pressable>
+
         {loaded && entries.length === 0 && (
           <Text
             style={[
@@ -359,6 +376,17 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  savedMealsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  savedMealsText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
   emptyText: {
     fontSize: 15,

@@ -118,4 +118,13 @@ describe('Food day view', () => {
 
     expect(router.push).toHaveBeenCalledWith({ pathname: '/edit-entry', params: { id: 'e2' } });
   });
+
+  it('opens the saved recipes list from the saved-meals affordance', async () => {
+    await render(<Food />);
+    await screen.findByText('Oats');
+
+    await fireEvent.press(screen.getByTestId('saved-meals-button'));
+
+    expect(router.push).toHaveBeenCalledWith('/recipes');
+  });
 });
