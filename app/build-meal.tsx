@@ -47,6 +47,7 @@ export default function BuildMealScreen() {
   const [recipeName, setRecipeName] = useState('');
   const [savingRecipe, setSavingRecipe] = useState(false);
   const [recipeError, setRecipeError] = useState<string | null>(null);
+  // NOTE: this ref-based "run once" guard assumes StrictMode is off (double-invoke would bypass it).
   const prefilledRecipeIdRef = useRef<string | null>(null);
 
   useFocusEffect(

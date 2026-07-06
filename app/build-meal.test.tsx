@@ -1,4 +1,4 @@
-import { render, fireEvent, screen } from '@testing-library/react-native';
+import { render, fireEvent, screen, act } from '@testing-library/react-native';
 
 import { Food } from '../src/db/repositories/foodsRepository';
 import { FoodLogEntry } from '../src/db/repositories/foodLogRepository';
@@ -55,6 +55,11 @@ const mockRecipesApi = {
 // Mutable so individual tests can simulate navigating here with a `recipeId` param.
 let mockSearchParams: { recipeId?: string } = {};
 
+// Reassigned on every render of `useFocusEffect` below to point at the current
+// component instance's setter, so tests can simulate a "refocus" (screen
+// re-entering focus, re-running the foods-loading effect) by calling it.
+let mockTriggerRefocus: () => void = () => {};
+
 jest.mock('../src/db/DatabaseProvider', () => ({
   useDb: () => ({
     foods: mockFoodsApi,
@@ -67,7 +72,15 @@ jest.mock('expo-router', () => ({
   router: { push: jest.fn(), back: () => mockBack() },
   useFocusEffect: (effect: () => void | (() => void)) => {
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    require('react').useEffect(() => effect(), []);
+    const React = require('react');
+    // `tick` starts each test at 0 and only changes when a test explicitly
+    // calls `mockTriggerRefocus`, so this preserves the "fires once on mount"
+    // behavior existing tests rely on while allowing an opt-in re-fire.
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const [tick, setTick] = React.useState(0);
+    mockTriggerRefocus = () => setTick((t: number) => t + 1);
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    React.useEffect(() => effect(), [tick]);
   },
   useLocalSearchParams: () => mockSearchParams,
 }));
@@ -222,5 +235,34 @@ describe('BuildMealScreen', () => {
     expect(await screen.findByText('Rice')).toBeTruthy();
     expect(screen.getByTestId('grams-input-0').props.value).toBe('60');
     expect(screen.queryByTestId('grams-input-1')).toBeNull();
+  });
+
+  it('does not clobber an in-progress grams edit when the screen refocuses and reloads foods', async () => {
+    mockSearchParams = { recipeId: 'r1' };
+    mockItemsFor.mockResolvedValueOnce([
+      { id: 'ri1', recipeId: 'r1', foodId: 'food-rice', grams: 60 },
+      { id: 'ri2', recipeId: 'r1', foodId: 'food-chicken', grams: 100 },
+    ]);
+
+    await render(<BuildMealScreen />);
+
+    const gramsInput = await screen.findByTestId('grams-input-0');
+    expect(gramsInput.props.value).toBe('60');
+
+    // User edits the prefilled grams value.
+    await fireEvent.changeText(gramsInput, '250');
+    expect(screen.getByTestId('grams-input-0').props.value).toBe('250');
+
+    // Simulate a refocus: the foods-loading `useFocusEffect` re-runs and
+    // `setAvailable` receives a brand-new `[rice, chicken]` array reference
+    // (mockFoodsApi.all() always returns a fresh array literal), which would
+    // re-trigger the prefill effect if it weren't guarded by `prefilledRecipeIdRef`.
+    await act(async () => {
+      mockTriggerRefocus();
+      await Promise.resolve();
+    });
+
+    expect((await screen.findByTestId('grams-input-0')).props.value).toBe('250');
+    expect(mockItemsFor).toHaveBeenCalledTimes(1);
   });
 });
