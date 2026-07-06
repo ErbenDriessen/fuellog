@@ -1,4 +1,5 @@
 import { render, fireEvent, screen, act } from '@testing-library/react-native';
+import { Linking } from 'react-native';
 
 import { Food } from '../src/db/repositories/foodsRepository';
 
@@ -24,7 +25,7 @@ const mockPush = jest.fn();
 const mockRequestPermission = jest.fn();
 
 // Mutable so tests can flip the permission state before rendering.
-let mockCurrentPermission: { granted: boolean } | null = { granted: true };
+let mockCurrentPermission: { granted: boolean; canAskAgain?: boolean } | null = { granted: true };
 
 // Captures the CameraView's onBarcodeScanned handler so tests can invoke it
 // directly, simulating a real scan without a real camera.
@@ -60,6 +61,8 @@ jest.mock('expo-camera', () => ({
 import ScanScreen from './scan';
 
 describe('ScanScreen', () => {
+  let openSettingsSpy: jest.SpiedFunction<typeof Linking.openSettings>;
+
   beforeEach(() => {
     existingFoods = [];
     mockCurrentPermission = { granted: true };
@@ -70,16 +73,33 @@ describe('ScanScreen', () => {
     mockPush.mockClear();
     mockRequestPermission.mockClear();
     mockFetchProductByBarcode.mockReset();
+    openSettingsSpy = jest.spyOn(Linking, 'openSettings').mockResolvedValue();
+  });
+
+  afterEach(() => {
+    openSettingsSpy.mockRestore();
   });
 
   it('shows a grant-camera prompt when permission is not granted, and requests it', async () => {
-    mockCurrentPermission = { granted: false };
+    mockCurrentPermission = { granted: false, canAskAgain: true };
     await render(<ScanScreen />);
 
     const grantButton = await screen.findByTestId('grant-camera-button');
     await fireEvent.press(grantButton);
 
     expect(mockRequestPermission).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows an Open Settings button when permission is permanently denied, and opens settings', async () => {
+    mockCurrentPermission = { granted: false, canAskAgain: false };
+    await render(<ScanScreen />);
+
+    expect(screen.queryByTestId('grant-camera-button')).toBeNull();
+    const settingsButton = await screen.findByTestId('open-settings-button');
+    await fireEvent.press(settingsButton);
+
+    expect(openSettingsSpy).toHaveBeenCalledTimes(1);
+    expect(mockRequestPermission).not.toHaveBeenCalled();
   });
 
   it('looks up a scanned barcode, shows the found product, and adds it on confirm', async () => {
@@ -207,5 +227,90 @@ describe('ScanScreen', () => {
     expect(await screen.findByText('Test Snack')).toBeTruthy();
     expect(mockFetchProductByBarcode).toHaveBeenCalledTimes(2);
     expect(mockFetchProductByBarcode).toHaveBeenLastCalledWith('222222');
+  });
+
+  it('shows an inline error and does not navigate back when saving the food fails', async () => {
+    mockFetchProductByBarcode.mockResolvedValueOnce(testFood);
+    mockFoodsAdd.mockRejectedValueOnce(new Error('boom'));
+    await render(<ScanScreen />);
+
+    await act(async () => {
+      mockLatestOnBarcodeScanned?.({ data: '123456' });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText('Test Snack')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('add-scanned-food-button'));
+
+    expect(await screen.findByText('Could not save this food. Please try again.')).toBeTruthy();
+    expect(mockBack).not.toHaveBeenCalled();
+  });
+
+  it('guards against a double-tap on Add, saving the food only once', async () => {
+    mockFetchProductByBarcode.mockResolvedValueOnce(testFood);
+    let resolveAdd: () => void = () => {};
+    mockFoodsAdd.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveAdd = resolve;
+        }),
+    );
+    await render(<ScanScreen />);
+
+    await act(async () => {
+      mockLatestOnBarcodeScanned?.({ data: '123456' });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText('Test Snack')).toBeTruthy();
+    const addButton = screen.getByTestId('add-scanned-food-button');
+
+    // Fire both presses before awaiting either — simulating a genuine double-tap
+    // where the second tap lands while the first save is still in flight on the
+    // pending foods.add() promise. The isSavingRef guard (checked synchronously
+    // before any await in handleAdd) must make the second press a no-op.
+    await act(async () => {
+      fireEvent.press(addButton);
+      fireEvent.press(addButton);
+      await Promise.resolve();
+    });
+
+    expect(mockFoodsAdd).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveAdd();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not update state or throw when unmounted while a lookup is in flight', async () => {
+    let resolveFetch: (food: Food | null) => void = () => {};
+    mockFetchProductByBarcode.mockImplementationOnce(
+      () =>
+        new Promise<Food | null>((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+    const view = await render(<ScanScreen />);
+
+    await act(async () => {
+      mockLatestOnBarcodeScanned?.({ data: '123456' });
+      await Promise.resolve();
+    });
+
+    view.unmount();
+
+    await expect(
+      act(async () => {
+        resolveFetch(testFood);
+        await Promise.resolve();
+        await Promise.resolve();
+      }),
+    ).resolves.not.toThrow();
   });
 });

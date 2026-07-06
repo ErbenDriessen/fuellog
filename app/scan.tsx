@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, useColorScheme, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, useColorScheme, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -21,11 +21,16 @@ export default function ScanScreen() {
   const [barcode, setBarcode] = useState<string | null>(null);
   const [food, setFood] = useState<Food | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Guards the rapid-repeat scans CameraView fires for the same barcode while a
   // lookup is in flight / a result is on screen. Reset only by scan-again/retry.
   const scannedRef = useRef(false);
   const mountedRef = useRef(true);
+  // Guards handleAdd against a fast double-tap starting a second save before the
+  // first has finished (which would otherwise double-insert and hit the
+  // foods table's PRIMARY KEY constraint). Checked-and-set synchronously.
+  const isSavingRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -76,6 +81,9 @@ export default function ScanScreen() {
 
   async function handleAdd() {
     if (!food) return;
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
+    setIsSaving(true);
     setAddError(null);
     try {
       const existing = await foods.all();
@@ -87,6 +95,11 @@ export default function ScanScreen() {
     } catch {
       if (mountedRef.current) {
         setAddError('Could not save this food. Please try again.');
+      }
+    } finally {
+      isSavingRef.current = false;
+      if (mountedRef.current) {
+        setIsSaving(false);
       }
     }
   }
@@ -101,23 +114,43 @@ export default function ScanScreen() {
             Camera access needed
           </Text>
           <Text style={[styles.permissionBody, { color: theme.colors.text2, marginBottom: theme.spacing(5) }]}>
-            FuelLog uses the camera to scan product barcodes and look them up on Open Food Facts.
+            {permission.canAskAgain === false
+              ? 'Camera access is disabled. Enable it in Settings.'
+              : 'FuelLog uses the camera to scan product barcodes and look them up on Open Food Facts.'}
           </Text>
-          <Pressable
-            testID="grant-camera-button"
-            onPress={() => requestPermission()}
-            style={[
-              styles.primaryButton,
-              {
-                backgroundColor: theme.colors.accent,
-                borderRadius: theme.radius.full,
-                paddingHorizontal: theme.spacing(6),
-                paddingVertical: theme.spacing(3),
-              },
-            ]}
-          >
-            <Text style={styles.primaryButtonText}>Allow camera access</Text>
-          </Pressable>
+          {permission.canAskAgain === false ? (
+            <Pressable
+              testID="open-settings-button"
+              onPress={() => Linking.openSettings()}
+              style={[
+                styles.primaryButton,
+                {
+                  backgroundColor: theme.colors.accent,
+                  borderRadius: theme.radius.full,
+                  paddingHorizontal: theme.spacing(6),
+                  paddingVertical: theme.spacing(3),
+                },
+              ]}
+            >
+              <Text style={styles.primaryButtonText}>Open Settings</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              testID="grant-camera-button"
+              onPress={() => requestPermission()}
+              style={[
+                styles.primaryButton,
+                {
+                  backgroundColor: theme.colors.accent,
+                  borderRadius: theme.radius.full,
+                  paddingHorizontal: theme.spacing(6),
+                  paddingVertical: theme.spacing(3),
+                },
+              ]}
+            >
+              <Text style={styles.primaryButtonText}>Allow camera access</Text>
+            </Pressable>
+          )}
           <Pressable
             onPress={() => router.back()}
             hitSlop={12}
@@ -196,9 +229,17 @@ export default function ScanScreen() {
                   <Pressable
                     testID="add-scanned-food-button"
                     onPress={handleAdd}
+                    disabled={isSaving}
                     style={[
                       styles.primaryButton,
-                      { backgroundColor: theme.colors.accent, borderRadius: theme.radius.full, paddingHorizontal: theme.spacing(6), paddingVertical: theme.spacing(3), marginLeft: theme.spacing(3) },
+                      {
+                        backgroundColor: theme.colors.accent,
+                        borderRadius: theme.radius.full,
+                        paddingHorizontal: theme.spacing(6),
+                        paddingVertical: theme.spacing(3),
+                        marginLeft: theme.spacing(3),
+                        opacity: isSaving ? 0.6 : 1,
+                      },
                     ]}
                   >
                     <Text style={styles.primaryButtonText}>Add</Text>
