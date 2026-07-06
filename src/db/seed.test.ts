@@ -1,9 +1,19 @@
-import { starterFoods, seedFoods, SeedableFoods } from './seed';
+import { starterFoods, seedFoods, SeedableFoods, defaultDailyTarget, seedDailyTarget, SeedableTargets } from './seed';
 import { Food } from './repositories/foodsRepository';
+import { DailyTarget } from './repositories/dailyTargetsRepository';
 
 function fakeRepo(initial: Food[] = []): SeedableFoods & { rows: Food[] } {
   const rows = [...initial];
   return { rows, async all() { return rows; }, async add(f) { rows.push(f); } };
+}
+
+function fakeTargetsRepo(initial: DailyTarget | null = null): SeedableTargets & { rows: DailyTarget[] } {
+  const rows: DailyTarget[] = initial ? [initial] : [];
+  return {
+    rows,
+    async current() { return rows.length ? rows[rows.length - 1] : null; },
+    async setTarget(t) { rows.push(t); },
+  };
 }
 
 describe('starterFoods', () => {
@@ -41,5 +51,31 @@ describe('seedFoods', () => {
     const n = await seedFoods(repo, 2000);
     expect(n).toBe(0);
     expect(repo.rows.length).toBe(before);
+  });
+});
+
+describe('defaultDailyTarget', () => {
+  it('returns the expected macros with a date-derived id', () => {
+    const t = defaultDailyTarget('2026-07-06');
+    expect(t).toEqual({
+      id: 'target-2026-07-06', kcal: 2400, protein: 165, carb: 240, fat: 70, effectiveFrom: '2026-07-06',
+    });
+  });
+});
+
+describe('seedDailyTarget', () => {
+  it('inserts the default target when none exists', async () => {
+    const repo = fakeTargetsRepo(null);
+    const seeded = await seedDailyTarget(repo, '2026-07-06');
+    expect(seeded).toBe(true);
+    expect(repo.rows).toEqual([defaultDailyTarget('2026-07-06')]);
+  });
+
+  it('is a no-op when a target already exists', async () => {
+    const existing = defaultDailyTarget('2026-01-01');
+    const repo = fakeTargetsRepo(existing);
+    const seeded = await seedDailyTarget(repo, '2026-07-06');
+    expect(seeded).toBe(false);
+    expect(repo.rows).toEqual([existing]);
   });
 });

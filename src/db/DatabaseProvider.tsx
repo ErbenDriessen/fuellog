@@ -3,12 +3,15 @@ import { ActivityIndicator, View, useColorScheme } from 'react-native';
 import { openAppDatabase } from './openAppDatabase';
 import { makeFoodsRepository } from './repositories/foodsRepository';
 import { makeFoodLogRepository } from './repositories/foodLogRepository';
-import { seedFoods } from './seed';
+import { makeDailyTargetsRepository } from './repositories/dailyTargetsRepository';
+import { seedFoods, seedDailyTarget } from './seed';
 import { getTheme } from '../theme/tokens';
+import { todayISO } from '../food/date';
 
 export interface Db {
   foods: ReturnType<typeof makeFoodsRepository>;
   foodLog: ReturnType<typeof makeFoodLogRepository>;
+  dailyTargets: ReturnType<typeof makeDailyTargetsRepository>;
 }
 
 const DbContext = createContext<Db | null>(null);
@@ -23,8 +26,10 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
       const exec = await openAppDatabase();
       const foods = makeFoodsRepository(exec);
       const foodLog = makeFoodLogRepository(exec);
+      const dailyTargets = makeDailyTargetsRepository(exec);
       await seedFoods(foods, Date.now());
-      if (active) setDb({ foods, foodLog });
+      await seedDailyTarget(dailyTargets, todayISO());
+      if (active) setDb({ foods, foodLog, dailyTargets });
     })();
     return () => { active = false; };
   }, []);

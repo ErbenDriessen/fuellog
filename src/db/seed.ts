@@ -1,4 +1,5 @@
 import { Food } from './repositories/foodsRepository';
+import { DailyTarget } from './repositories/dailyTargetsRepository';
 
 // A small realistic starter library (per-100g macros) so the app is usable
 // before barcode/OCR exist. Deterministic ids make seeding idempotent.
@@ -35,4 +36,21 @@ export async function seedFoods(repo: SeedableFoods, now: number): Promise<numbe
   const foods = starterFoods(now);
   for (const f of foods) await repo.add(f);
   return foods.length;
+}
+
+export function defaultDailyTarget(effectiveFrom: string): DailyTarget {
+  return { id: `target-${effectiveFrom}`, kcal: 2400, protein: 165, carb: 240, fat: 70, effectiveFrom };
+}
+
+export interface SeedableTargets {
+  current(): Promise<DailyTarget | null>;
+  setTarget(t: DailyTarget): Promise<void>;
+}
+
+// Idempotent: seeds the default target only when none exists yet. Returns whether it seeded.
+export async function seedDailyTarget(repo: SeedableTargets, effectiveFrom: string): Promise<boolean> {
+  const existing = await repo.current();
+  if (existing) return false;
+  await repo.setTarget(defaultDailyTarget(effectiveFrom));
+  return true;
 }
