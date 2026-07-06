@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -34,6 +34,8 @@ export default function EditTargetsScreen() {
     fat: '',
   });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     let active = true;
@@ -52,6 +54,13 @@ export default function EditTargetsScreen() {
       active = false;
     };
   }, [dailyTargets]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   function updateField(key: Field['key'], text: string) {
     setValues((prev) => ({ ...prev, [key]: sanitizeDecimal(text) }));
@@ -76,6 +85,7 @@ export default function EditTargetsScreen() {
   async function handleSave() {
     if (!valid || saving) return;
     setSaving(true);
+    setError(null);
     try {
       const target: DailyTarget = {
         id: `target-${todayISO()}`,
@@ -87,8 +97,14 @@ export default function EditTargetsScreen() {
       };
       await dailyTargets.setTarget(target);
       router.back();
+    } catch {
+      if (mountedRef.current) {
+        setError('Could not save targets. Please try again.');
+      }
     } finally {
-      setSaving(false);
+      if (mountedRef.current) {
+        setSaving(false);
+      }
     }
   }
 
@@ -136,6 +152,15 @@ export default function EditTargetsScreen() {
             />
           </View>
         ))}
+
+        {error && (
+          <Text
+            testID="save-targets-error"
+            style={[styles.errorText, { color: theme.colors.accent, marginTop: theme.spacing(4) }]}
+          >
+            {error}
+          </Text>
+        )}
 
         <Pressable
           testID="save-targets-button"
@@ -189,6 +214,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  errorText: {
     fontSize: 13,
     fontWeight: '600',
   },

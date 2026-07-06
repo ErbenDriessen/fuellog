@@ -26,6 +26,7 @@ export function Ring({ size, stroke, pct, color, trackColor, children, testID }:
         <Circle cx={center} cy={center} r={r} stroke={trackColor} strokeWidth={stroke} fill="none" />
         <G rotation={-90} origin={`${center}, ${center}`}>
           <Circle
+            testID="ring-progress"
             cx={center}
             cy={center}
             r={r}

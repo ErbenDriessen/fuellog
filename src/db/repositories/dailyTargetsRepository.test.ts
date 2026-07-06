@@ -18,19 +18,30 @@ function fakeExecutor(rows: unknown[]) {
 }
 
 describe('dailyTargetsRepository', () => {
-  it('builds a parameterized insert with columns in order', () => {
+  it('builds a parameterized upsert with columns in order', () => {
     const { sql, params } = insertDailyTargetSql(sample);
-    expect(sql).toContain('INSERT INTO daily_targets');
+    expect(sql).toContain('INSERT OR REPLACE INTO daily_targets');
     expect(params).toEqual(['target-2026-07-06', 2400, 165, 240, 70, '2026-07-06']);
   });
 
-  it('setTarget() forwards the parameterized insert to the executor', async () => {
+  it('setTarget() forwards the parameterized upsert to the executor', async () => {
     const { db, execCalls } = fakeExecutor([]);
     const repo = makeDailyTargetsRepository(db);
     await repo.setTarget(sample);
     expect(execCalls).toHaveLength(1);
-    expect(execCalls[0].sql).toContain('INSERT INTO daily_targets');
+    expect(execCalls[0].sql).toContain('INSERT OR REPLACE INTO daily_targets');
     expect(execCalls[0].params).toEqual(['target-2026-07-06', 2400, 165, 240, 70, '2026-07-06']);
+  });
+
+  it('setTarget() called twice for the same id issues INSERT OR REPLACE both times', async () => {
+    const { db, execCalls } = fakeExecutor([]);
+    const repo = makeDailyTargetsRepository(db);
+    await repo.setTarget(sample);
+    await repo.setTarget({ ...sample, kcal: 2500 });
+    expect(execCalls).toHaveLength(2);
+    expect(execCalls[0].sql).toContain('INSERT OR REPLACE');
+    expect(execCalls[1].sql).toContain('INSERT OR REPLACE');
+    expect(execCalls[1].params).toEqual(['target-2026-07-06', 2500, 165, 240, 70, '2026-07-06']);
   });
 
   it('current() maps the latest snake_case row to a DailyTarget', async () => {

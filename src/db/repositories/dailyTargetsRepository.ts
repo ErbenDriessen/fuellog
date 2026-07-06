@@ -11,7 +11,7 @@ export interface DailyTarget {
 
 export function insertDailyTargetSql(t: DailyTarget): { sql: string; params: unknown[] } {
   return {
-    sql: `INSERT INTO daily_targets (id, kcal, protein, carb, fat, effective_from)
+    sql: `INSERT OR REPLACE INTO daily_targets (id, kcal, protein, carb, fat, effective_from)
       VALUES (?, ?, ?, ?, ?, ?)`,
     params: [t.id, t.kcal, t.protein, t.carb, t.fat, t.effectiveFrom],
   };
@@ -27,8 +27,10 @@ function rowToTarget(r: DailyTargetRow): DailyTarget {
 
 export function makeDailyTargetsRepository(db: QueryableExecutor) {
   return {
-    // Targets are versioned by effective_from (schema design). Setting a target inserts a new row;
-    // current() returns the most recent.
+    // Targets are versioned by effective_from (schema design). Setting a target upserts the row for
+    // its id (INSERT OR REPLACE), so re-saving the same day's target updates it in place instead of
+    // colliding on the primary key; a new effective_from still gets its own row. current() returns
+    // the most recent.
     async setTarget(t: DailyTarget): Promise<void> {
       const { sql, params } = insertDailyTargetSql(t);
       await db.exec(sql, params);

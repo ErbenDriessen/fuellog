@@ -58,4 +58,18 @@ describe('EditTargetsScreen', () => {
 
     expect(mockBack).toHaveBeenCalledTimes(1);
   });
+
+  it('shows an inline error and stays open when setTarget rejects', async () => {
+    mockSetTarget.mockRejectedValueOnce(new Error('disk full'));
+    await render(<EditTargetsScreen />);
+
+    await screen.findByTestId('target-kcal-input');
+    await fireEvent.press(screen.getByTestId('save-targets-button'));
+
+    expect(await screen.findByTestId('save-targets-error')).toBeTruthy();
+    expect(mockBack).not.toHaveBeenCalled();
+
+    // The save button is re-enabled (not stuck in the saving state) so a retry is possible.
+    expect(screen.getByTestId('save-targets-button').props.disabled).toBeFalsy();
+  });
 });
