@@ -315,6 +315,14 @@ export default function BuildMealScreen() {
                 <Text style={[styles.pickerName, { color: theme.colors.accent }]}>▢ Scan barcode</Text>
               </Pressable>
 
+              <Pressable
+                testID="scan-label-button"
+                onPress={() => router.push('/scan-label')}
+                style={[styles.pickerRow, { borderBottomColor: theme.colors.border, padding: theme.spacing(3) }]}
+              >
+                <Text style={[styles.pickerName, { color: theme.colors.accent }]}>▤ Scan nutrition label</Text>
+              </Pressable>
+
               {available.length === 0 ? (
                 <Text style={[styles.emptyText, { color: theme.colors.text3, padding: theme.spacing(3) }]}>
                   No foods available yet.

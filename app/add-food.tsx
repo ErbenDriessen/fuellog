@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 
 import { useDb } from '../src/db/DatabaseProvider';
 import { getTheme } from '../src/theme/tokens';
@@ -25,14 +25,18 @@ export default function AddFoodScreen() {
   const scheme = useColorScheme();
   const theme = getTheme(scheme === 'dark' ? 'dark' : 'light');
   const { foods } = useDb();
+  // Optional prefill params from a barcode/label scan — present when navigated here via
+  // router.replace/push with kcal/protein/carb/fat. Absent on the plain "create a food" path,
+  // in which case the fields simply default to empty as before.
+  const params = useLocalSearchParams<{ kcal?: string; protein?: string; carb?: string; fat?: string }>();
 
   const [name, setName] = useState('');
-  const [values, setValues] = useState<Record<Field['key'], string>>({
-    kcal: '',
-    protein: '',
-    carb: '',
-    fat: '',
-  });
+  const [values, setValues] = useState<Record<Field['key'], string>>(() => ({
+    kcal: params.kcal ?? '',
+    protein: params.protein ?? '',
+    carb: params.carb ?? '',
+    fat: params.fat ?? '',
+  }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
