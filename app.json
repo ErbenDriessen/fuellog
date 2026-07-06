@@ -3,6 +3,7 @@
     "name": "fuellog",
     "slug": "fuellog",
     "version": "1.0.0",
+    "scheme": "fuellog",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -20,6 +21,7 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": ["expo-router"]
   }
 }

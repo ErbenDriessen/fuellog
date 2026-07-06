@@ -1,0 +1,37 @@
+import { StyleSheet, Text, useColorScheme, View } from 'react-native';
+
+import { getTheme } from '../../src/theme/tokens';
+
+export default function ProgressScreen() {
+  const scheme = useColorScheme();
+  const theme = getTheme(scheme === 'dark' ? 'dark' : 'light');
+
+  return (
+    <View
+      testID="screen-progress"
+      style={[
+        styles.root,
+        { backgroundColor: theme.colors.bg, paddingTop: theme.spacing(14), paddingHorizontal: theme.spacing(5) },
+      ]}
+    >
+      <Text style={[styles.heading, { color: theme.colors.text }]}>Progress</Text>
+      <Text style={[styles.subtitle, { color: theme.colors.text2, marginTop: theme.spacing(1) }]}>
+        See trends across food and gym
+      </Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  heading: {
+    fontSize: 28,
+    fontWeight: '700',
+  },
+  subtitle: {
+    fontSize: 15,
+    fontWeight: '400',
+  },
+});
