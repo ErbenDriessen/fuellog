@@ -56,6 +56,20 @@ export function makeFoodLogRepository(db: QueryableExecutor) {
       const { sql, params } = insertFoodLogSql(e);
       await db.exec(sql, params);
     },
+    async addMany(entries: FoodLogEntry[]): Promise<void> {
+      if (entries.length === 0) return;
+      await db.exec('BEGIN');
+      try {
+        for (const e of entries) {
+          const { sql, params } = insertFoodLogSql(e);
+          await db.exec(sql, params);
+        }
+        await db.exec('COMMIT');
+      } catch (err) {
+        await db.exec('ROLLBACK');
+        throw err;
+      }
+    },
     async entriesForDate(logDate: string): Promise<FoodLogEntry[]> {
       const rows = await db.queryAll<FoodLogRow>(
         'SELECT * FROM food_log_entries WHERE log_date = ? ORDER BY rowid',

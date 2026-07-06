@@ -24,7 +24,7 @@ export function buildLogEntries(
   ctx: { meal: string; logDate: string; makeId: (index: number) => string },
 ): FoodLogEntry[] {
   return items.map((ing, i) => {
-    const m = roundMacros(scaleMacros(ing.food, ing.grams));
+    const m = roundMacros(ingredientMacros(ing));
     return {
       id: ctx.makeId(i),
       logDate: ctx.logDate,

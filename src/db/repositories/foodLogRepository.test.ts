@@ -6,11 +6,21 @@ const sample: FoodLogEntry = {
   grams: 160, kcal: 208, protein: 4.3, carb: 44.8, fat: 0.5,
 };
 
-function fakeExecutor(rows: unknown[]) {
+const sample2: FoodLogEntry = {
+  id: 'e2', logDate: '2026-07-06', meal: 'Lunch', foodId: 'seed-chicken', recipeId: null,
+  grams: 100, kcal: 165, protein: 31, carb: 0, fat: 3.6,
+};
+
+function fakeExecutor(rows: unknown[], failOnExecCall?: number) {
   const execCalls: { sql: string; params: unknown[] }[] = [];
   const queryCalls: { sql: string; params: unknown[] }[] = [];
   const db: QueryableExecutor = {
-    async exec(sql: string, params: unknown[] = []) { execCalls.push({ sql, params }); },
+    async exec(sql: string, params: unknown[] = []) {
+      execCalls.push({ sql, params });
+      if (failOnExecCall !== undefined && execCalls.length === failOnExecCall) {
+        throw new Error('insert failed');
+      }
+    },
     async getVersion() { return 1; },
     async setVersion() {},
     async queryAll<T>(sql: string, params: unknown[] = []) { queryCalls.push({ sql, params }); return rows as T[]; },
@@ -31,6 +41,40 @@ describe('foodLogRepository', () => {
     await repo.add(sample);
     expect(execCalls).toHaveLength(1);
     expect(execCalls[0].params).toEqual(['e1', '2026-07-06', 'Lunch', 'seed-white-rice', null, 160, 208, 4.3, 44.8, 0.5]);
+  });
+
+  describe('addMany()', () => {
+    it('wraps inserts in a BEGIN...COMMIT transaction', async () => {
+      const { db, execCalls } = fakeExecutor([]);
+      const repo = makeFoodLogRepository(db);
+      await repo.addMany([sample, sample2]);
+
+      expect(execCalls).toHaveLength(4);
+      expect(execCalls[0].sql).toBe('BEGIN');
+      expect(execCalls[1].sql).toContain('INSERT INTO food_log_entries');
+      expect(execCalls[1].params).toEqual(['e1', '2026-07-06', 'Lunch', 'seed-white-rice', null, 160, 208, 4.3, 44.8, 0.5]);
+      expect(execCalls[2].sql).toContain('INSERT INTO food_log_entries');
+      expect(execCalls[2].params).toEqual(['e2', '2026-07-06', 'Lunch', 'seed-chicken', null, 100, 165, 31, 0, 3.6]);
+      expect(execCalls[3].sql).toBe('COMMIT');
+    });
+
+    it('rolls back and rethrows if an insert fails', async () => {
+      // 1st exec call is BEGIN, 2nd is the first INSERT, 3rd (the 2nd INSERT) fails.
+      const { db, execCalls } = fakeExecutor([], 3);
+      const repo = makeFoodLogRepository(db);
+
+      await expect(repo.addMany([sample, sample2])).rejects.toThrow('insert failed');
+
+      expect(execCalls[0].sql).toBe('BEGIN');
+      expect(execCalls[execCalls.length - 1].sql).toBe('ROLLBACK');
+    });
+
+    it('is a no-op for an empty entry list (no BEGIN issued)', async () => {
+      const { db, execCalls } = fakeExecutor([]);
+      const repo = makeFoodLogRepository(db);
+      await repo.addMany([]);
+      expect(execCalls).toHaveLength(0);
+    });
   });
 
   it('entriesForDate() filters by date and maps rows back', async () => {

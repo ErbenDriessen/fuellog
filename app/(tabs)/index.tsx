@@ -8,10 +8,7 @@ import { getTheme } from '../../src/theme/tokens';
 import { FoodLogEntry } from '../../src/db/repositories/foodLogRepository';
 import { roundMacros, sumMacros } from '../../src/food/macros';
 import { Food } from '../../src/db/repositories/foodsRepository';
-
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+import { todayISO } from '../../src/food/date';
 
 function todayLabel(): string {
   return new Date().toLocaleDateString(undefined, {
@@ -88,7 +85,6 @@ export default function FoodScreen() {
       >
         <View
           style={[
-            styles.totalsCard,
             {
               backgroundColor: theme.colors.surface,
               borderRadius: theme.radius.lg,
@@ -201,7 +197,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '400',
   },
-  totalsCard: {},
   totalKcal: {
     fontSize: 32,
     fontWeight: '700',

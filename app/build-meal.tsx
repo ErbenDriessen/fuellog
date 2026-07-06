@@ -16,6 +16,7 @@ import { getTheme } from '../src/theme/tokens';
 import { Food } from '../src/db/repositories/foodsRepository';
 import { roundMacros } from '../src/food/macros';
 import { buildLogEntries, ingredientMacros, mealTotal, MealIngredient } from '../src/food/meal';
+import { todayISO } from '../src/food/date';
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snack'] as const;
 type MealType = (typeof MEAL_TYPES)[number];
@@ -55,6 +56,8 @@ export default function BuildMealScreen() {
     [rows],
   );
 
+  const validItems = useMemo(() => items.filter((i) => i.grams > 0), [items]);
+
   const total = useMemo(() => roundMacros(mealTotal(items)), [items]);
 
   function addIngredient(food: Food) {
@@ -63,7 +66,8 @@ export default function BuildMealScreen() {
   }
 
   function updateGrams(index: number, text: string) {
-    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, gramsText: text } : r)));
+    const sanitized = text.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, gramsText: sanitized } : r)));
   }
 
   function removeIngredient(index: number) {
@@ -71,18 +75,16 @@ export default function BuildMealScreen() {
   }
 
   async function handleLogMeal() {
-    if (items.length === 0 || saving) return;
+    if (validItems.length === 0 || saving) return;
     setSaving(true);
     try {
-      const logDate = new Date().toISOString().slice(0, 10);
-      const entries = buildLogEntries(items, {
+      const logDate = todayISO();
+      const entries = buildLogEntries(validItems, {
         meal,
         logDate,
         makeId: (i) => `${Date.now()}-${i}`,
       });
-      for (const e of entries) {
-        await foodLog.add(e);
-      }
+      await foodLog.addMany(entries);
       router.back();
     } finally {
       setSaving(false);
@@ -121,7 +123,6 @@ export default function BuildMealScreen() {
                 key={type}
                 onPress={() => setMeal(type)}
                 style={[
-                  styles.chip,
                   {
                     backgroundColor: selected ? theme.colors.accent : theme.colors.surface2,
                     borderRadius: theme.radius.full,
@@ -179,7 +180,7 @@ export default function BuildMealScreen() {
                     testID={`grams-input-${index}`}
                     value={rows[index]?.gramsText ?? String(item.grams)}
                     onChangeText={(text) => updateGrams(index, text)}
-                    keyboardType="numeric"
+                    keyboardType="decimal-pad"
                     style={[
                       styles.gramsInput,
                       {
@@ -272,12 +273,11 @@ export default function BuildMealScreen() {
           </View>
           <Pressable
             testID="log-meal-button"
-            disabled={items.length === 0 || saving}
+            disabled={validItems.length === 0 || saving}
             onPress={handleLogMeal}
             style={[
-              styles.logButton,
               {
-                backgroundColor: items.length === 0 ? theme.colors.track : theme.colors.accent,
+                backgroundColor: validItems.length === 0 ? theme.colors.track : theme.colors.accent,
                 borderRadius: theme.radius.full,
                 paddingHorizontal: theme.spacing(6),
                 paddingVertical: theme.spacing(3),
@@ -287,7 +287,7 @@ export default function BuildMealScreen() {
             <Text
               style={[
                 styles.logButtonText,
-                { color: items.length === 0 ? theme.colors.text3 : '#ffffff' },
+                { color: validItems.length === 0 ? theme.colors.text3 : '#ffffff' },
               ]}
             >
               Log meal
@@ -327,7 +327,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
-  chip: {},
   chipText: {
     fontSize: 14,
     fontWeight: '600',
@@ -417,7 +416,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  logButton: {},
   logButtonText: {
     fontSize: 16,
     fontWeight: '700',
