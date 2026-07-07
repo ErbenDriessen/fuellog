@@ -1,4 +1,4 @@
-import { render, fireEvent, screen, act } from '@testing-library/react-native';
+import { render, fireEvent, screen, act, waitFor } from '@testing-library/react-native';
 import { Linking } from 'react-native';
 
 const mockBack = jest.fn();
@@ -112,6 +112,27 @@ describe('ScanLabelScreen', () => {
         fat: '12.5',
       },
     });
+  });
+
+  it('removes the capture button once a capture starts, preventing a second capture (re-entrancy guard)', async () => {
+    mockRecognizeText.mockResolvedValueOnce(VALID_LABEL_TEXT);
+    await render(<ScanLabelScreen />);
+
+    await fireEvent.press(screen.getByTestId('capture-label-button'));
+
+    // The moment a capture starts, the button is removed from the tree (status -> 'reading'),
+    // so there is no target for a second tap — the re-entrancy guard has taken effect.
+    expect(screen.queryByTestId('capture-label-button')).toBeNull();
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // The single capture ran exactly once end to end — no duplicate photo / OCR / navigation.
+    expect(mockTakePictureAsync).toHaveBeenCalledTimes(1);
+    expect(mockRecognizeText).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledTimes(1);
   });
 
   it('shows a failed UI with retry/manual options when the OCR text has no usable macros', async () => {
