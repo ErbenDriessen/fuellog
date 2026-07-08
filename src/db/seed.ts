@@ -1,5 +1,6 @@
 import { Food } from './repositories/foodsRepository';
 import { DailyTarget } from './repositories/dailyTargetsRepository';
+import { Exercise, EXERCISE_LIBRARY } from '../gym/exercises';
 
 // A small realistic starter library (per-100g macros) so the app is usable
 // before barcode/OCR exist. Deterministic ids make seeding idempotent.
@@ -36,6 +37,19 @@ export async function seedFoods(repo: SeedableFoods, now: number): Promise<numbe
   const foods = starterFoods(now);
   for (const f of foods) await repo.add(f);
   return foods.length;
+}
+
+// Idempotent: seeds the exercise catalogue only when the table is empty (so a
+// user's custom additions are never disturbed). Returns rows inserted.
+export interface SeedableExercises {
+  all(): Promise<Exercise[]>;
+  add(e: Exercise): Promise<void>;
+}
+export async function seedExercises(repo: SeedableExercises): Promise<number> {
+  const existing = await repo.all();
+  if (existing.length > 0) return 0;
+  for (const e of EXERCISE_LIBRARY) await repo.add(e);
+  return EXERCISE_LIBRARY.length;
 }
 
 export function defaultDailyTarget(effectiveFrom: string): DailyTarget {

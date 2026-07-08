@@ -5,7 +5,8 @@ import { makeFoodsRepository } from './repositories/foodsRepository';
 import { makeFoodLogRepository } from './repositories/foodLogRepository';
 import { makeDailyTargetsRepository } from './repositories/dailyTargetsRepository';
 import { makeRecipesRepository } from './repositories/recipesRepository';
-import { seedFoods, seedDailyTarget } from './seed';
+import { makeGymRepository } from './repositories/gymRepository';
+import { seedFoods, seedDailyTarget, seedExercises } from './seed';
 import { getTheme } from '../theme/tokens';
 import { todayISO } from '../food/date';
 
@@ -14,6 +15,7 @@ export interface Db {
   foodLog: ReturnType<typeof makeFoodLogRepository>;
   dailyTargets: ReturnType<typeof makeDailyTargetsRepository>;
   recipes: ReturnType<typeof makeRecipesRepository>;
+  gym: ReturnType<typeof makeGymRepository>;
 }
 
 const DbContext = createContext<Db | null>(null);
@@ -30,9 +32,11 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
       const foodLog = makeFoodLogRepository(exec);
       const dailyTargets = makeDailyTargetsRepository(exec);
       const recipes = makeRecipesRepository(exec);
+      const gym = makeGymRepository(exec);
       await seedFoods(foods, Date.now());
       await seedDailyTarget(dailyTargets, todayISO());
-      if (active) setDb({ foods, foodLog, dailyTargets, recipes });
+      await seedExercises({ all: () => gym.allExercises(), add: (e) => gym.addExercise(e) });
+      if (active) setDb({ foods, foodLog, dailyTargets, recipes, gym });
     })();
     return () => { active = false; };
   }, []);

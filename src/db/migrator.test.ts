@@ -39,4 +39,11 @@ describe('runMigrations', () => {
       expect(joined).toContain(`CREATE TABLE IF NOT EXISTS ${t}`);
     }
   });
+
+  it('real schema adds a slug column to exercises so library exercises round-trip', async () => {
+    const db = new FakeDb();
+    const v = await runMigrations(db, migrations);
+    expect(v).toBeGreaterThanOrEqual(2);
+    expect(db.executed.join('\n')).toContain('ALTER TABLE exercises ADD COLUMN slug TEXT');
+  });
 });

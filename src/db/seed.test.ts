@@ -1,6 +1,10 @@
-import { starterFoods, seedFoods, SeedableFoods, defaultDailyTarget, seedDailyTarget, SeedableTargets } from './seed';
+import {
+  starterFoods, seedFoods, SeedableFoods, defaultDailyTarget, seedDailyTarget, SeedableTargets,
+  seedExercises, SeedableExercises,
+} from './seed';
 import { Food } from './repositories/foodsRepository';
 import { DailyTarget } from './repositories/dailyTargetsRepository';
+import { Exercise, EXERCISE_LIBRARY } from '../gym/exercises';
 
 function fakeRepo(initial: Food[] = []): SeedableFoods & { rows: Food[] } {
   const rows = [...initial];
@@ -14,6 +18,11 @@ function fakeTargetsRepo(initial: DailyTarget | null = null): SeedableTargets & 
     async current() { return rows.length ? rows[rows.length - 1] : null; },
     async setTarget(t) { rows.push(t); },
   };
+}
+
+function fakeExercisesRepo(initial: Exercise[] = []): SeedableExercises & { rows: Exercise[] } {
+  const rows = [...initial];
+  return { rows, async all() { return rows; }, async add(e) { rows.push(e); } };
 }
 
 describe('starterFoods', () => {
@@ -51,6 +60,22 @@ describe('seedFoods', () => {
     const n = await seedFoods(repo, 2000);
     expect(n).toBe(0);
     expect(repo.rows.length).toBe(before);
+  });
+});
+
+describe('seedExercises', () => {
+  it('inserts the whole exercise library into an empty repo', async () => {
+    const repo = fakeExercisesRepo();
+    const n = await seedExercises(repo);
+    expect(n).toBe(EXERCISE_LIBRARY.length);
+    expect(repo.rows).toEqual(EXERCISE_LIBRARY);
+  });
+
+  it('is idempotent — inserts nothing when exercises already exist', async () => {
+    const repo = fakeExercisesRepo(EXERCISE_LIBRARY);
+    const n = await seedExercises(repo);
+    expect(n).toBe(0);
+    expect(repo.rows.length).toBe(EXERCISE_LIBRARY.length);
   });
 });
 
