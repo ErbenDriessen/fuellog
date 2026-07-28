@@ -1,6 +1,7 @@
 import { QueryableExecutor } from '../migrator';
 import { Routine, RoutineDay, RoutineExercise } from '../../gym/routine';
 import { Exercise } from '../../gym/exercises';
+import { WorkoutSession, LoggedSet } from '../../gym/session';
 
 export function insertRoutineSql(r: Routine): { sql: string; params: unknown[] } {
   return {
@@ -31,6 +32,20 @@ export function insertExerciseSql(e: Exercise): { sql: string; params: unknown[]
   };
 }
 
+export function insertWorkoutSessionSql(s: WorkoutSession): { sql: string; params: unknown[] } {
+  return {
+    sql: `INSERT INTO workout_sessions (id, routine_day_id, started_at, finished_at) VALUES (?, ?, ?, ?)`,
+    params: [s.id, s.routineDayId, s.startedAt, s.finishedAt],
+  };
+}
+
+export function insertLoggedSetSql(s: LoggedSet): { sql: string; params: unknown[] } {
+  return {
+    sql: `INSERT INTO logged_sets (id, session_id, exercise_id, set_number, reps, weight) VALUES (?, ?, ?, ?, ?, ?)`,
+    params: [s.id, s.sessionId, s.exerciseId, s.setNumber, s.reps, s.weight],
+  };
+}
+
 interface RoutineRow { id: string; name: string; rotation_pointer: number; created_at: number }
 interface RoutineDayRow { id: string; routine_id: string; name: string; sequence: number; pinned_weekday: number | null }
 interface RoutineExerciseRow {
@@ -52,6 +67,19 @@ function rowToRoutineExercise(r: RoutineExerciseRow): RoutineExercise {
 }
 function rowToExercise(r: ExerciseRow): Exercise {
   return { id: r.id, slug: r.slug, name: r.name, muscleGroup: r.muscle_group, equipment: r.equipment };
+}
+
+interface WorkoutSessionRow { id: string; routine_day_id: string | null; started_at: number; finished_at: number | null }
+interface LoggedSetRow { id: string; session_id: string; exercise_id: string; set_number: number; reps: number; weight: number }
+
+function rowToSession(r: WorkoutSessionRow): WorkoutSession {
+  return { id: r.id, routineDayId: r.routine_day_id, startedAt: r.started_at, finishedAt: r.finished_at };
+}
+function rowToLoggedSet(r: LoggedSetRow): LoggedSet {
+  return {
+    id: r.id, sessionId: r.session_id, exerciseId: r.exercise_id,
+    setNumber: r.set_number, reps: r.reps, weight: r.weight,
+  };
 }
 
 export function makeGymRepository(db: QueryableExecutor) {
@@ -104,6 +132,51 @@ export function makeGymRepository(db: QueryableExecutor) {
     async addExercise(e: Exercise): Promise<void> {
       const q = insertExerciseSql(e);
       await db.exec(q.sql, q.params);
+    },
+    // Atomic: the finished session plus every performed set in one transaction.
+    async saveSession(session: WorkoutSession, sets: LoggedSet[]): Promise<void> {
+      await db.exec('BEGIN');
+      try {
+        const s = insertWorkoutSessionSql(session);
+        await db.exec(s.sql, s.params);
+        for (const set of sets) {
+          const q = insertLoggedSetSql(set);
+          await db.exec(q.sql, q.params);
+        }
+        await db.exec('COMMIT');
+      } catch (err) {
+        await db.exec('ROLLBACK');
+        throw err;
+      }
+    },
+    async sessions(): Promise<WorkoutSession[]> {
+      const rows = await db.queryAll<WorkoutSessionRow>(
+        'SELECT * FROM workout_sessions ORDER BY started_at DESC', [],
+      );
+      return rows.map(rowToSession);
+    },
+    async setsForSession(sessionId: string): Promise<LoggedSet[]> {
+      const rows = await db.queryAll<LoggedSetRow>(
+        'SELECT * FROM logged_sets WHERE session_id = ? ORDER BY set_number', [sessionId],
+      );
+      return rows.map(rowToLoggedSet);
+    },
+    // The performed sets from the most recent FINISHED session that included this exercise —
+    // feeds progressiveOverloadHint (map each to { reps, weight }).
+    async lastSetsForExercise(exerciseId: string): Promise<LoggedSet[]> {
+      const rows = await db.queryAll<LoggedSetRow>(
+        `SELECT * FROM logged_sets
+         WHERE exercise_id = ?
+           AND session_id = (
+             SELECT ws.id FROM workout_sessions ws
+             JOIN logged_sets l2 ON l2.session_id = ws.id AND l2.exercise_id = ?
+             WHERE ws.finished_at IS NOT NULL
+             ORDER BY ws.started_at DESC LIMIT 1
+           )
+         ORDER BY set_number`,
+        [exerciseId, exerciseId],
+      );
+      return rows.map(rowToLoggedSet);
     },
   };
 }

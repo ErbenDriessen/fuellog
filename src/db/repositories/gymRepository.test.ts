@@ -3,10 +3,13 @@ import {
   insertRoutineDaySql,
   insertRoutineExerciseSql,
   insertExerciseSql,
+  insertWorkoutSessionSql,
+  insertLoggedSetSql,
   makeGymRepository,
 } from './gymRepository';
 import { Routine, RoutineDay, RoutineExercise } from '../../gym/routine';
 import { Exercise } from '../../gym/exercises';
+import { WorkoutSession, LoggedSet } from '../../gym/session';
 import { QueryableExecutor } from '../migrator';
 
 const routine: Routine = { id: 'r1', name: 'My PPL', rotationPointer: 0, createdAt: 1000 };
@@ -141,5 +144,85 @@ describe('gymRepository exercise catalogue', () => {
     await makeGymRepository(db).addExercise(exercise);
     expect(execCalls[0].sql).toContain('INSERT INTO exercises');
     expect(execCalls[0].params).toEqual(['ex-bench-press', 'bench-press', 'Barbell Bench Press', 'Chest', 'Barbell']);
+  });
+});
+
+describe('gym sessions', () => {
+  const session: WorkoutSession = { id: 's1', routineDayId: 'd0', startedAt: 2000, finishedAt: 3000 };
+  const sets: LoggedSet[] = [
+    { id: 'ls0', sessionId: 's1', exerciseId: 'ex-bench-press', setNumber: 0, reps: 8, weight: 60 },
+    { id: 'ls1', sessionId: 's1', exerciseId: 'ex-bench-press', setNumber: 1, reps: 7, weight: 60 },
+  ];
+
+  describe('sql builders', () => {
+    it('insertWorkoutSessionSql builds [id, routine_day_id, started_at, finished_at]', () => {
+      const { sql, params } = insertWorkoutSessionSql(session);
+      expect(sql).toContain('INSERT INTO workout_sessions');
+      expect(params).toEqual(['s1', 'd0', 2000, 3000]);
+    });
+
+    it('insertLoggedSetSql builds [id, session_id, exercise_id, set_number, reps, weight]', () => {
+      const { sql, params } = insertLoggedSetSql(sets[0]);
+      expect(sql).toContain('INSERT INTO logged_sets');
+      expect(params).toEqual(['ls0', 's1', 'ex-bench-press', 0, 8, 60]);
+    });
+  });
+
+  describe('saveSession', () => {
+    it('writes the session and every logged set in one transaction', async () => {
+      const { db, execCalls } = fakeExecutor([]);
+      await makeGymRepository(db).saveSession(session, sets);
+      expect(execCalls[0].sql).toBe('BEGIN');
+      expect(execCalls.map((c) => c.sql).filter((s) => s.includes('INSERT INTO workout_sessions'))).toHaveLength(1);
+      expect(execCalls.map((c) => c.sql).filter((s) => s.includes('INSERT INTO logged_sets'))).toHaveLength(2);
+      expect(execCalls[execCalls.length - 1].sql).toBe('COMMIT');
+    });
+
+    it('rolls back and rethrows when a write fails', async () => {
+      const { db, execCalls } = fakeExecutor([], 2); // fail on the session insert
+      await expect(makeGymRepository(db).saveSession(session, sets)).rejects.toThrow('insert failed');
+      expect(execCalls[execCalls.length - 1].sql).toBe('ROLLBACK');
+    });
+  });
+
+  describe('reads', () => {
+    it('sessions() maps rows and orders by newest first', async () => {
+      const { db, queryCalls } = fakeExecutor([
+        { id: 's1', routine_day_id: 'd0', started_at: 2000, finished_at: 3000 },
+      ]);
+      const rows = await makeGymRepository(db).sessions();
+      expect(queryCalls[0].sql).toContain('ORDER BY started_at DESC');
+      expect(rows).toEqual([session]);
+    });
+
+    it('sessions() maps a null finished_at back to null', async () => {
+      const { db } = fakeExecutor([
+        { id: 's2', routine_day_id: null, started_at: 4000, finished_at: null },
+      ]);
+      const rows = await makeGymRepository(db).sessions();
+      expect(rows[0].finishedAt).toBeNull();
+      expect(rows[0].routineDayId).toBeNull();
+    });
+
+    it('setsForSession() passes [id] and maps rows in set order', async () => {
+      const { db, queryCalls } = fakeExecutor([
+        { id: 'ls0', session_id: 's1', exercise_id: 'ex-bench-press', set_number: 0, reps: 8, weight: 60 },
+        { id: 'ls1', session_id: 's1', exercise_id: 'ex-bench-press', set_number: 1, reps: 7, weight: 60 },
+      ]);
+      const rows = await makeGymRepository(db).setsForSession('s1');
+      expect(queryCalls[0].params).toEqual(['s1']);
+      expect(queryCalls[0].sql).toContain('ORDER BY set_number');
+      expect(rows).toEqual(sets);
+    });
+
+    it('lastSetsForExercise() passes [id, id] and maps rows', async () => {
+      const { db, queryCalls } = fakeExecutor([
+        { id: 'ls0', session_id: 's1', exercise_id: 'ex-bench-press', set_number: 0, reps: 8, weight: 60 },
+      ]);
+      const rows = await makeGymRepository(db).lastSetsForExercise('ex-bench-press');
+      expect(queryCalls[0].params).toEqual(['ex-bench-press', 'ex-bench-press']);
+      expect(queryCalls[0].sql).toContain('ORDER BY set_number');
+      expect(rows).toEqual([sets[0]]);
+    });
   });
 });
