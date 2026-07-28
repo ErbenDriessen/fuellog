@@ -42,4 +42,10 @@ export const migrations: Migration[] = [
         id TEXT PRIMARY KEY, metric_date TEXT NOT NULL, weight REAL NOT NULL)`,
     ],
   },
+  {
+    // Exercises carry a stable slug so seeded library entries round-trip and can
+    // be reconciled by slug when the built-in catalogue grows in later versions.
+    version: 2,
+    up: [`ALTER TABLE exercises ADD COLUMN slug TEXT`],
+  },
 ];
