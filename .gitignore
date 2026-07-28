@@ -47,3 +47,6 @@ yarn-error.*
 # Design prototypes & dev tooling (not shippable)
 /protos/
 /tools/
+
+# Linked git worktrees (e.g. in-progress phase branches) — not part of the tree
+/.claude/worktrees/
