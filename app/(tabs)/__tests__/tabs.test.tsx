@@ -18,11 +18,19 @@ jest.mock('../../../src/db/DatabaseProvider', () => ({
       current: async () => null,
       setTarget: async () => {},
     },
+    gym: {
+      routines: async () => [],
+      daysFor: async () => [],
+      exercisesFor: async () => [],
+      allExercises: async () => [],
+      saveRoutine: async () => {},
+    },
   }),
 }));
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), back: jest.fn() },
+  useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
   useFocusEffect: (effect: () => void | (() => void)) => {
     // Lazily require inside the factory: jest.mock factories cannot close
     // over out-of-scope variables/imports from the enclosing module.
