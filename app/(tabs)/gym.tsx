@@ -53,7 +53,6 @@ function TemplateCard({
       testID={`template-${template.id}`}
       onPress={onPress}
       style={[
-        styles.card,
         {
           backgroundColor: theme.colors.surface,
           borderRadius: theme.radius.lg,
@@ -169,7 +168,6 @@ export default function GymScreen() {
             <View
               testID="next-session"
               style={[
-                styles.card,
                 {
                   backgroundColor: theme.colors.surface,
                   borderRadius: theme.radius.lg,
@@ -245,7 +243,6 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 15,
   },
-  card: {},
   templateName: {
     fontSize: 17,
     fontWeight: '700',
