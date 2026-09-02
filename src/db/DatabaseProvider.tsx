@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { ActivityIndicator, View, useColorScheme } from 'react-native';
+import { ActivityIndicator, Text, View, useColorScheme } from 'react-native';
 import { openAppDatabase } from './openAppDatabase';
 import { makeFoodsRepository } from './repositories/foodsRepository';
 import { makeFoodLogRepository } from './repositories/foodLogRepository';
@@ -22,24 +22,54 @@ const DbContext = createContext<Db | null>(null);
 
 export function DatabaseProvider({ children }: { children: React.ReactNode }) {
   const [db, setDb] = useState<Db | null>(null);
+  const [error, setError] = useState<Error | null>(null);
   const theme = getTheme(useColorScheme() === 'dark' ? 'dark' : 'light');
 
   useEffect(() => {
     let active = true;
     (async () => {
-      const exec = await openAppDatabase();
-      const foods = makeFoodsRepository(exec);
-      const foodLog = makeFoodLogRepository(exec);
-      const dailyTargets = makeDailyTargetsRepository(exec);
-      const recipes = makeRecipesRepository(exec);
-      const gym = makeGymRepository(exec);
-      await seedFoods(foods, Date.now());
-      await seedDailyTarget(dailyTargets, todayISO());
-      await seedExercises({ all: () => gym.allExercises(), add: (e) => gym.addExercise(e) });
-      if (active) setDb({ foods, foodLog, dailyTargets, recipes, gym });
+      try {
+        const exec = await openAppDatabase();
+        const foods = makeFoodsRepository(exec);
+        const foodLog = makeFoodLogRepository(exec);
+        const dailyTargets = makeDailyTargetsRepository(exec);
+        const recipes = makeRecipesRepository(exec);
+        const gym = makeGymRepository(exec);
+        await seedFoods(foods, Date.now());
+        await seedDailyTarget(dailyTargets, todayISO());
+        await seedExercises({ all: () => gym.allExercises(), add: (e) => gym.addExercise(e) });
+        if (active) setDb({ foods, foodLog, dailyTargets, recipes, gym });
+      } catch (err) {
+        // Surface DB open/migrate/seed failures instead of hanging on the
+        // loading spinner forever (which is indistinguishable from a blank screen).
+        console.error('[DatabaseProvider] failed to initialize the database', err);
+        if (active) setError(err instanceof Error ? err : new Error(String(err)));
+      }
     })();
     return () => { active = false; };
   }, []);
+
+  if (error) {
+    return (
+      <View
+        testID="db-error"
+        style={{
+          flex: 1,
+          backgroundColor: theme.colors.bg,
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: theme.spacing(6),
+        }}
+      >
+        <Text style={{ color: theme.colors.text, fontSize: 18, fontWeight: '700', marginBottom: theme.spacing(2) }}>
+          Couldn’t open the database
+        </Text>
+        <Text style={{ color: theme.colors.text2, fontSize: 14, textAlign: 'center' }}>
+          {error.message}
+        </Text>
+      </View>
+    );
+  }
 
   if (!db) {
     return (
