@@ -20,6 +20,9 @@ import { buildLogEntries, ingredientMacros, mealTotal, MealIngredient } from '..
 import { buildRecipe } from '../src/food/recipe';
 import { todayISO } from '../src/food/date';
 import { sanitizeDecimal } from '../src/food/number';
+import { groupFoodsByCategory } from '../src/food/foodGroups';
+import { Card } from '../src/components/ui/Card';
+import { SearchBar } from '../src/components/ui/SearchBar';
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snack'] as const;
 type MealType = (typeof MEAL_TYPES)[number];
@@ -42,6 +45,7 @@ export default function BuildMealScreen() {
   const [available, setAvailable] = useState<Food[]>([]);
   const [rows, setRows] = useState<{ food: Food; gramsText: string }[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [recipeModalOpen, setRecipeModalOpen] = useState(false);
   const [recipeName, setRecipeName] = useState('');
@@ -97,10 +101,26 @@ export default function BuildMealScreen() {
 
   const total = useMemo(() => roundMacros(mealTotal(items)), [items]);
 
+  function openPicker() {
+    setSearch('');
+    setPickerOpen(true);
+  }
+
+  function closePicker() {
+    setPickerOpen(false);
+    setSearch('');
+  }
+
   function addIngredient(food: Food) {
     setRows((prev) => [...prev, { food, gramsText: '100' }]);
-    setPickerOpen(false);
+    closePicker();
   }
+
+  const filteredGroups = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const matches = q ? available.filter((f) => f.name.toLowerCase().includes(q)) : available;
+    return groupFoodsByCategory(matches);
+  }, [available, search]);
 
   function updateGrams(index: number, text: string) {
     const sanitized = sanitizeDecimal(text);
@@ -277,7 +297,7 @@ export default function BuildMealScreen() {
           )}
 
           <Pressable
-            onPress={() => setPickerOpen((v) => !v)}
+            onPress={openPicker}
             style={[
               styles.addButton,
               {
@@ -288,61 +308,9 @@ export default function BuildMealScreen() {
               },
             ]}
           >
-            <Ionicons name={pickerOpen ? 'remove' : 'add'} size={18} color={theme.colors.accent} />
+            <Ionicons name="add" size={18} color={theme.colors.accent} />
             <Text style={[styles.addButtonText, { color: theme.colors.accent }]}>Add ingredient</Text>
           </Pressable>
-
-          {pickerOpen && (
-            <View
-              style={[
-                styles.picker,
-                { backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, marginTop: theme.spacing(2) },
-              ]}
-            >
-              <Pressable
-                testID="create-food-button"
-                onPress={() => router.push('/add-food')}
-                style={[styles.pickerRow, { borderBottomColor: theme.colors.border, padding: theme.spacing(3) }]}
-              >
-                <Text style={[styles.pickerName, { color: theme.colors.accent }]}>＋ Create a new food</Text>
-              </Pressable>
-
-              <Pressable
-                testID="scan-barcode-button"
-                onPress={() => router.push('/scan')}
-                style={[styles.pickerRow, { borderBottomColor: theme.colors.border, padding: theme.spacing(3) }]}
-              >
-                <Text style={[styles.pickerName, { color: theme.colors.accent }]}>▢ Scan barcode</Text>
-              </Pressable>
-
-              <Pressable
-                testID="scan-label-button"
-                onPress={() => router.push('/scan-label')}
-                style={[styles.pickerRow, { borderBottomColor: theme.colors.border, padding: theme.spacing(3) }]}
-              >
-                <Text style={[styles.pickerName, { color: theme.colors.accent }]}>▤ Scan nutrition label</Text>
-              </Pressable>
-
-              {available.length === 0 ? (
-                <Text style={[styles.emptyText, { color: theme.colors.text3, padding: theme.spacing(3) }]}>
-                  No foods available yet.
-                </Text>
-              ) : (
-                available.map((food) => (
-                  <Pressable
-                    key={food.id}
-                    onPress={() => addIngredient(food)}
-                    style={[styles.pickerRow, { borderBottomColor: theme.colors.border, padding: theme.spacing(3) }]}
-                  >
-                    <Text style={[styles.pickerName, { color: theme.colors.text }]}>{food.name}</Text>
-                    <Text style={[styles.pickerMeta, { color: theme.colors.text3 }]}>
-                      {food.kcalPer100} kcal / 100g
-                    </Text>
-                  </Pressable>
-                ))
-              )}
-            </View>
-          )}
         </View>
       </ScrollView>
 
@@ -417,6 +385,108 @@ export default function BuildMealScreen() {
           </View>
         </View>
       </View>
+
+      <Modal
+        visible={pickerOpen}
+        animationType="slide"
+        onRequestClose={closePicker}
+        presentationStyle="fullScreen"
+      >
+        <View style={[styles.root, { backgroundColor: theme.colors.bg }]}>
+          <View
+            style={[
+              styles.header,
+              { paddingTop: theme.spacing(14), paddingHorizontal: theme.spacing(5), paddingBottom: theme.spacing(3) },
+            ]}
+          >
+            <Pressable
+              testID="close-picker-button"
+              accessibilityLabel="Close"
+              onPress={closePicker}
+              hitSlop={12}
+              style={[styles.closeButton, { backgroundColor: theme.colors.surface2 }]}
+            >
+              <Ionicons name="close" size={20} color={theme.colors.text} />
+            </Pressable>
+            <Text style={[styles.title, { color: theme.colors.text }]}>Add ingredient</Text>
+            <View style={styles.closeButton} />
+          </View>
+
+          <View style={{ paddingHorizontal: theme.spacing(5) }}>
+            <SearchBar
+              testID="ingredient-search"
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search foods"
+            />
+
+            <View style={[styles.actionRow, { marginTop: theme.spacing(3) }]}>
+              <Pressable
+                testID="create-food-button"
+                onPress={() => router.push('/add-food')}
+                style={[styles.actionChip, { backgroundColor: theme.colors.accentSoft, borderRadius: theme.radius.full }]}
+              >
+                <Ionicons name="add" size={16} color={theme.colors.accent} />
+                <Text style={[styles.actionChipText, { color: theme.colors.accent }]}>New food</Text>
+              </Pressable>
+              <Pressable
+                testID="scan-barcode-button"
+                onPress={() => router.push('/scan')}
+                style={[styles.actionChip, { backgroundColor: theme.colors.accentSoft, borderRadius: theme.radius.full }]}
+              >
+                <Ionicons name="barcode-outline" size={16} color={theme.colors.accent} />
+                <Text style={[styles.actionChipText, { color: theme.colors.accent }]}>Scan</Text>
+              </Pressable>
+              <Pressable
+                testID="scan-label-button"
+                onPress={() => router.push('/scan-label')}
+                style={[styles.actionChip, { backgroundColor: theme.colors.accentSoft, borderRadius: theme.radius.full }]}
+              >
+                <Ionicons name="document-text-outline" size={16} color={theme.colors.accent} />
+                <Text style={[styles.actionChipText, { color: theme.colors.accent }]}>Label</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <ScrollView
+            style={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingHorizontal: theme.spacing(5), paddingTop: theme.spacing(4), paddingBottom: theme.spacing(10) }}
+          >
+            {filteredGroups.length === 0 ? (
+              <Text style={[styles.emptyText, { color: theme.colors.text3, marginTop: theme.spacing(6), textAlign: 'center' }]}>
+                {available.length === 0 ? 'No foods yet — add one above.' : 'No foods match your search.'}
+              </Text>
+            ) : (
+              filteredGroups.map((section) => (
+                <View key={section.group.id} style={{ marginBottom: theme.spacing(5) }}>
+                  <Text style={[styles.groupLabel, { color: theme.colors.text2, marginBottom: theme.spacing(2) }]}>
+                    {section.group.label}
+                  </Text>
+                  {section.foods.map((food) => (
+                    <Card
+                      key={food.id}
+                      testID={`food-card-${food.id}`}
+                      onPress={() => addIngredient(food)}
+                      style={{ marginBottom: theme.spacing(2), flexDirection: 'row', alignItems: 'center' }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.foodCardName, { color: theme.colors.text }]} numberOfLines={1}>
+                          {food.name}
+                        </Text>
+                        <Text style={[styles.foodCardMeta, { color: theme.colors.text3, marginTop: theme.spacing(1) }]}>
+                          {food.kcalPer100} kcal · P {food.proteinPer100} · C {food.carbPer100} · F {food.fatPer100} / 100g
+                        </Text>
+                      </View>
+                      <Ionicons name="add-circle" size={24} color={theme.colors.accent} />
+                    </Card>
+                  ))}
+                </View>
+              ))
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
 
       <Modal
         visible={recipeModalOpen}
@@ -573,21 +643,33 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-  picker: {
-    overflow: 'hidden',
-  },
-  pickerRow: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
+  actionRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 8,
+  },
+  actionChip: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
   },
-  pickerName: {
-    fontSize: 15,
-    fontWeight: '500',
+  actionChipText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
-  pickerMeta: {
+  groupLabel: {
     fontSize: 13,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  foodCardName: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  foodCardMeta: {
+    fontSize: 12,
   },
   bottomBar: {
     borderTopWidth: StyleSheet.hairlineWidth,
