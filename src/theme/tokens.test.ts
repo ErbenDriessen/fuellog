@@ -19,7 +19,7 @@ describe('theme tokens', () => {
   });
 
   it('exposes the full radius scale', () => {
-    expect(getTheme('dark').radius).toEqual({ sm: 10, md: 14, lg: 18, xl: 24, full: 999 });
+    expect(getTheme('dark').radius).toEqual({ sm: 14, md: 18, lg: 22, xl: 26, full: 999 });
   });
 
   it('every color is a hex string', () => {
@@ -27,6 +27,24 @@ describe('theme tokens', () => {
       for (const c of Object.values(theme.colors)) {
         expect(c).toMatch(/^#[0-9a-fA-F]{6}$/);
       }
+    }
+  });
+
+  it('exposes the font family map both themes share', () => {
+    for (const theme of [getTheme('light'), getTheme('dark')]) {
+      expect(theme.fonts).toEqual({
+        serif: 'Newsreader_400Regular',
+        body: 'NunitoSans_400Regular',
+        bodyBold: 'NunitoSans_700Bold',
+        bodyHeavy: 'NunitoSans_800ExtraBold',
+      });
+    }
+  });
+
+  it('exposes card and button shadow presets', () => {
+    for (const theme of [getTheme('light'), getTheme('dark')]) {
+      expect(theme.shadow.card).toBeDefined();
+      expect(theme.shadow.button).toBeDefined();
     }
   });
 });
