@@ -48,4 +48,13 @@ export const migrations: Migration[] = [
     version: 2,
     up: [`ALTER TABLE exercises ADD COLUMN slug TEXT`],
   },
+  {
+    // Kind redesign: a simple key/value settings store. Holds numbers_mode
+    // ('gentle' | 'exact'), water_goal, onboarded and reflection_time.
+    version: 3,
+    up: [
+      `CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
+    ],
+  },
 ];

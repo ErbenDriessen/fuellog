@@ -9,6 +9,7 @@ import {
 } from '@expo-google-fonts/nunito-sans';
 
 import { DatabaseProvider } from '../src/db/DatabaseProvider';
+import { SettingsProvider } from '../src/settings/SettingsProvider';
 
 // Hold the native splash until the app's fonts have loaded so the first paint
 // already uses Newsreader / Nunito Sans rather than flashing the system font.
@@ -36,7 +37,8 @@ export default function RootLayout() {
 
   return (
     <DatabaseProvider>
-      <Stack screenOptions={{ headerShown: false }}>
+      <SettingsProvider>
+        <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="gym-day" />
         <Stack.Screen name="build-meal" options={{ presentation: 'modal' }} />
@@ -45,8 +47,9 @@ export default function RootLayout() {
         <Stack.Screen name="add-food" options={{ presentation: 'modal' }} />
         <Stack.Screen name="recipes" options={{ presentation: 'modal' }} />
         <Stack.Screen name="scan" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="scan-label" options={{ presentation: 'modal' }} />
-      </Stack>
+          <Stack.Screen name="scan-label" options={{ presentation: 'modal' }} />
+        </Stack>
+      </SettingsProvider>
     </DatabaseProvider>
   );
 }

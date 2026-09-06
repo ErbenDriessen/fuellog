@@ -6,6 +6,7 @@ import { makeFoodLogRepository } from './repositories/foodLogRepository';
 import { makeDailyTargetsRepository } from './repositories/dailyTargetsRepository';
 import { makeRecipesRepository } from './repositories/recipesRepository';
 import { makeGymRepository } from './repositories/gymRepository';
+import { makeSettingsRepository } from './repositories/settingsRepository';
 import { seedFoods, seedDailyTarget, seedExercises } from './seed';
 import { getTheme } from '../theme/tokens';
 import { todayISO } from '../food/date';
@@ -16,6 +17,7 @@ export interface Db {
   dailyTargets: ReturnType<typeof makeDailyTargetsRepository>;
   recipes: ReturnType<typeof makeRecipesRepository>;
   gym: ReturnType<typeof makeGymRepository>;
+  settings: ReturnType<typeof makeSettingsRepository>;
 }
 
 const DbContext = createContext<Db | null>(null);
@@ -35,10 +37,11 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
         const dailyTargets = makeDailyTargetsRepository(exec);
         const recipes = makeRecipesRepository(exec);
         const gym = makeGymRepository(exec);
+        const settings = makeSettingsRepository(exec);
         await seedFoods(foods, Date.now());
         await seedDailyTarget(dailyTargets, todayISO());
         await seedExercises({ all: () => gym.allExercises(), add: (e) => gym.addExercise(e) });
-        if (active) setDb({ foods, foodLog, dailyTargets, recipes, gym });
+        if (active) setDb({ foods, foodLog, dailyTargets, recipes, gym, settings });
       } catch (err) {
         // Surface DB open/migrate/seed failures instead of hanging on the
         // loading spinner forever (which is indistinguishable from a blank screen).
