@@ -13,7 +13,8 @@ import { SettingsProvider } from '../src/settings/SettingsProvider';
 
 // Hold the native splash until the app's fonts have loaded so the first paint
 // already uses Newsreader / Nunito Sans rather than flashing the system font.
-void SplashScreen.preventAutoHideAsync();
+// Guarded so a dev client built before expo-splash-screen was added still runs.
+void SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -27,7 +28,7 @@ export default function RootLayout() {
     // Reveal the app once fonts are ready — or if they failed, so a font CDN
     // problem can never leave the user stuck on the splash forever.
     if (fontsLoaded || fontError) {
-      void SplashScreen.hideAsync();
+      void SplashScreen.hideAsync().catch(() => {});
     }
   }, [fontsLoaded, fontError]);
 

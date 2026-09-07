@@ -7,6 +7,9 @@ import { makeDailyTargetsRepository } from './repositories/dailyTargetsRepositor
 import { makeRecipesRepository } from './repositories/recipesRepository';
 import { makeGymRepository } from './repositories/gymRepository';
 import { makeSettingsRepository } from './repositories/settingsRepository';
+import { makeWaterRepository } from './repositories/waterRepository';
+import { makeEnergyRepository } from './repositories/energyRepository';
+import { makeReflectionsRepository } from './repositories/reflectionsRepository';
 import { seedFoods, seedDailyTarget, seedExercises } from './seed';
 import { getTheme } from '../theme/tokens';
 import { todayISO } from '../food/date';
@@ -18,6 +21,9 @@ export interface Db {
   recipes: ReturnType<typeof makeRecipesRepository>;
   gym: ReturnType<typeof makeGymRepository>;
   settings: ReturnType<typeof makeSettingsRepository>;
+  water: ReturnType<typeof makeWaterRepository>;
+  energy: ReturnType<typeof makeEnergyRepository>;
+  reflections: ReturnType<typeof makeReflectionsRepository>;
 }
 
 const DbContext = createContext<Db | null>(null);
@@ -38,10 +44,13 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
         const recipes = makeRecipesRepository(exec);
         const gym = makeGymRepository(exec);
         const settings = makeSettingsRepository(exec);
+        const water = makeWaterRepository(exec);
+        const energy = makeEnergyRepository(exec);
+        const reflections = makeReflectionsRepository(exec);
         await seedFoods(foods, Date.now());
         await seedDailyTarget(dailyTargets, todayISO());
         await seedExercises({ all: () => gym.allExercises(), add: (e) => gym.addExercise(e) });
-        if (active) setDb({ foods, foodLog, dailyTargets, recipes, gym, settings });
+        if (active) setDb({ foods, foodLog, dailyTargets, recipes, gym, settings, water, energy, reflections });
       } catch (err) {
         // Surface DB open/migrate/seed failures instead of hanging on the
         // loading spinner forever (which is indistinguishable from a blank screen).

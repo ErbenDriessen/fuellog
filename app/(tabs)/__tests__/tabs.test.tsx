@@ -18,6 +18,9 @@ jest.mock('../../../src/db/DatabaseProvider', () => ({
       current: async () => null,
       setTarget: async () => {},
     },
+    water: { getForDate: async () => 0, setForDate: async () => {} },
+    energy: { getForDate: async () => null, setForDate: async () => {} },
+    reflections: { getForDate: async () => null, setForDate: async () => {} },
     gym: {
       routines: async () => [],
       daysFor: async () => [],
@@ -25,6 +28,20 @@ jest.mock('../../../src/db/DatabaseProvider', () => ({
       allExercises: async () => [],
       saveRoutine: async () => {},
     },
+  }),
+}));
+
+jest.mock('../../../src/settings/SettingsProvider', () => ({
+  useSettings: () => ({
+    loading: false,
+    mode: 'gentle',
+    setMode: async () => {},
+    waterGoal: 8,
+    setWaterGoal: async () => {},
+    onboarded: true,
+    setOnboarded: async () => {},
+    reflectionTime: '21:00',
+    setReflectionTime: async () => {},
   }),
 }));
 

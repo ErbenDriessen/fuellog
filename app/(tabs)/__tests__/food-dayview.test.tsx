@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react-native';
 
 import { Food as FoodItem } from '../../../src/db/repositories/foodsRepository';
 import { FoodLogEntry } from '../../../src/db/repositories/foodLogRepository';
+import { NumbersMode } from '../../../src/food/phrasing';
 
 const oats: FoodItem = {
   id: 'food-oats', name: 'Oats', barcode: null,
@@ -19,8 +20,7 @@ const chicken: FoodItem = {
   source: 'seed', createdAt: 0,
 };
 
-// Fixture entries across two meals with round numbers so the summed total
-// needs no fuzzy-rounding assertions: 190 + 200 + 150 = 540 kcal etc.
+// 190 + 200 + 150 = 540 kcal; protein 56.5, carb 43, fat 11.5.
 const fixtureEntries: FoodLogEntry[] = [
   { id: 'e1', logDate: '2026-07-06', meal: 'Breakfast', foodId: 'food-oats', recipeId: null,
     grams: 50, kcal: 190, protein: 6.5, carb: 33, fat: 3.5 },
@@ -30,9 +30,6 @@ const fixtureEntries: FoodLogEntry[] = [
     grams: 100, kcal: 150, protein: 30, carb: 0, fat: 3 },
 ];
 
-// Stable references — even though this screen's `useFocusEffect` mock below
-// pins its own deps to `[]`, keep `foods`/`foodLog` referentially stable
-// across renders to match the real DatabaseProvider contract.
 const mockFoodsApi = {
   all: async () => [oats, rice, chicken],
   add: async () => {},
@@ -42,24 +39,40 @@ const mockFoodLogApi = {
   add: async () => {},
   addMany: async () => {},
 };
-
 const mockDailyTargetsApi = {
-  current: async () => ({
-    id: 't',
-    kcal: 2400,
-    protein: 165,
-    carb: 240,
-    fat: 70,
-    effectiveFrom: '2026-07-06',
-  }),
+  current: async () => ({ id: 't', kcal: 2400, protein: 165, carb: 240, fat: 70, effectiveFrom: '2026-07-06' }),
   setTarget: async () => {},
 };
+const mockSetWater = jest.fn(async () => {});
+const mockSetEnergy = jest.fn(async () => {});
+const mockWaterApi = { getForDate: async () => 0, setForDate: mockSetWater };
+const mockEnergyApi = { getForDate: async () => null, setForDate: mockSetEnergy };
+const mockReflectionsApi = { getForDate: async () => null, setForDate: async () => {} };
 
 jest.mock('../../../src/db/DatabaseProvider', () => ({
   useDb: () => ({
     foods: mockFoodsApi,
     foodLog: mockFoodLogApi,
     dailyTargets: mockDailyTargetsApi,
+    water: mockWaterApi,
+    energy: mockEnergyApi,
+    reflections: mockReflectionsApi,
+  }),
+}));
+
+// Mode is mutated per test to exercise Gentle vs Exact.
+let mockMode: NumbersMode = 'gentle';
+jest.mock('../../../src/settings/SettingsProvider', () => ({
+  useSettings: () => ({
+    loading: false,
+    mode: mockMode,
+    setMode: async () => {},
+    waterGoal: 8,
+    setWaterGoal: async () => {},
+    onboarded: true,
+    setOnboarded: async () => {},
+    reflectionTime: '21:00',
+    setReflectionTime: async () => {},
   }),
 }));
 
@@ -75,56 +88,80 @@ import { router } from 'expo-router';
 import Food from '../index';
 
 describe('Food day view', () => {
-  it('renders meal sections in order and sums the daily total from fixture entries', async () => {
-    await render(<Food />);
+  beforeEach(() => {
+    mockMode = 'gentle';
+    mockSetWater.mockClear();
+    mockSetEnergy.mockClear();
+    (router.push as jest.Mock).mockClear();
+  });
 
+  it('renders meal groups in order with their foods', async () => {
+    await render(<Food />);
     await screen.findByText('Oats');
 
     const tree = JSON.stringify(screen.toJSON());
-    expect(tree.indexOf('Breakfast')).toBeLessThan(tree.indexOf('Lunch'));
+    expect(tree.indexOf('BREAKFAST')).toBeLessThan(tree.indexOf('LUNCH'));
     expect(tree.indexOf('Oats')).toBeLessThan(tree.indexOf('Rice'));
-
-    // Entries render with their food name and per-entry macros.
-    expect(screen.getByText('Oats')).toBeTruthy();
-    expect(screen.getByText('Rice')).toBeTruthy();
     expect(screen.getByText('Chicken breast')).toBeTruthy();
-
-    // Daily total: 190 + 200 + 150 = 540 kcal, 6.5+20+30 = 56.5g protein,
-    // 33+10+0 = 43g carb, 3.5+5+3 = 11.5g fat.
-    // Target (from the seeded/mocked dailyTargets.current()) is 2400/165/240/70,
-    // so remaining kcal = 2400 - 540 = 1860, shown in the hero ring.
-    expect(screen.getByText('1860')).toBeTruthy();
-    expect(screen.getByText('KCAL LEFT')).toBeTruthy();
-    expect(screen.getByText('540 / 2400')).toBeTruthy();
-    expect(screen.getByText('56.5')).toBeTruthy();
-    expect(screen.getByText('43')).toBeTruthy();
-    expect(screen.getByText('11.5')).toBeTruthy();
   });
 
-  it('opens the edit-targets screen from the edit affordance', async () => {
+  it('shows exact numbers in Exact mode', async () => {
+    mockMode = 'exact';
     await render(<Food />);
     await screen.findByText('Oats');
 
-    await fireEvent.press(screen.getByTestId('edit-targets-button'));
+    // remaining kcal 2400 - 540 = 1860.
+    expect(screen.getByText('1860')).toBeTruthy();
+    expect(screen.getByText('KCAL LEFT')).toBeTruthy();
+    expect(screen.getByText('540 / 2400')).toBeTruthy();
+    // macro rows as eaten / target.
+    expect(screen.getByText('56.5 / 165 g')).toBeTruthy();
+    expect(screen.getByText('43 / 240 g')).toBeTruthy();
+    expect(screen.getByText('11.5 / 70 g')).toBeTruthy();
+  });
 
+  it('shows words instead of numbers in Gentle mode', async () => {
+    await render(<Food />);
+    await screen.findByText('Oats');
+
+    // 540 / 2400 = 0.225 -> "Room to eat"; no calorie figure shown.
+    expect(screen.getByText('Room to eat')).toBeTruthy();
+    expect(screen.queryByText('1860')).toBeNull();
+    expect(screen.queryByText('540 / 2400')).toBeNull();
+  });
+
+  it('opens the edit-targets screen from the Targets affordance', async () => {
+    await render(<Food />);
+    await screen.findByText('Oats');
+    await fireEvent.press(screen.getByTestId('edit-targets-button'));
     expect(router.push).toHaveBeenCalledWith('/edit-targets');
   });
 
   it('opens the edit-entry screen when a logged entry row is pressed', async () => {
     await render(<Food />);
     await screen.findByText('Oats');
-
     await fireEvent.press(screen.getByTestId('entry-row-e2'));
-
     expect(router.push).toHaveBeenCalledWith({ pathname: '/edit-entry', params: { id: 'e2' } });
   });
 
-  it('opens the saved recipes list from the saved-meals affordance', async () => {
+  it('opens the saved recipes list from the usual-meals affordance', async () => {
     await render(<Food />);
     await screen.findByText('Oats');
-
     await fireEvent.press(screen.getByTestId('saved-meals-button'));
-
     expect(router.push).toHaveBeenCalledWith('/recipes');
+  });
+
+  it('logs a glass of water', async () => {
+    await render(<Food />);
+    await screen.findByText('Oats');
+    await fireEvent.press(screen.getByTestId('water-add'));
+    expect(mockSetWater).toHaveBeenCalledWith(expect.any(String), 1);
+  });
+
+  it('records an energy check-in', async () => {
+    await render(<Food />);
+    await screen.findByText('Oats');
+    await fireEvent.press(screen.getByTestId('energy-good'));
+    expect(mockSetEnergy).toHaveBeenCalledWith(expect.any(String), 'good');
   });
 });

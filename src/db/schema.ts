@@ -57,4 +57,16 @@ export const migrations: Migration[] = [
         key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
     ],
   },
+  {
+    // Kind redesign, Today screen: gentle daily self-care logs, one row per day.
+    version: 4,
+    up: [
+      `CREATE TABLE IF NOT EXISTS water_log (
+        log_date TEXT PRIMARY KEY, glasses INTEGER NOT NULL)`,
+      `CREATE TABLE IF NOT EXISTS energy_checkins (
+        log_date TEXT PRIMARY KEY, level TEXT NOT NULL)`,
+      `CREATE TABLE IF NOT EXISTS reflections (
+        log_date TEXT PRIMARY KEY, body TEXT NOT NULL, created_at INTEGER NOT NULL)`,
+    ],
+  },
 ];
